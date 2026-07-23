@@ -9,10 +9,14 @@ services:
       - "3000:3000"
     env_file:
       - .env
-    # 如果 OpenClaw 运行在宿主机上，用 host.docker.internal 访问
-    # OPENCLAW_BASE_URL=http://host.docker.internal:18789
+    # OpenClaw 运行在宿主机上时，容器内 127.0.0.1 访问不到，
+    # 必须用 host.docker.internal 指向宿主机。
+    # 配合 .env 中 OPENCLAW_BASE_URL=http://host.docker.internal:18789
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      # 持久化生成的 PNG（可选，方便调试）
+      # 挂载到宿主机以便查看生成的 PNG。
+      # 注意：宿主机 ./public 目录必须存在且 appuser(UID 1000) 有写权限。
+      # 首次启动前请在宿主机执行：
+      #   mkdir -p ./public && chown -R 1000:1000 ./public
       - ./public:/app/public

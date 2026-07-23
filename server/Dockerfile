@@ -28,8 +28,14 @@ RUN npm install --production
 
 COPY . .
 
+# 预创建输出目录，确保 appuser 有写权限
+RUN mkdir -p /app/public
+
 # 创建非特权用户运行 Chromium
-RUN groupadd -r appuser && useradd -r -g appuser -G audio,video appuser \
+# 固定 UID/GID=1000，与宿主机挂载目录 ./public 权限对齐
+# 宿主机需执行：mkdir -p ./public && chown -R 1000:1000 ./public
+RUN groupadd -r -g 1000 appuser \
+    && useradd -r -u 1000 -g appuser -G audio,video appuser \
     && mkdir -p /home/appuser/Downloads \
     && chown -R appuser:appuser /home/appuser \
     && chown -R appuser:appuser /app
