@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  kindle-dash-server:
+    build: .
+    container_name: kindle-dash-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    # 如果 OpenClaw 运行在宿主机上，用 host.docker.internal 访问
+    # OPENCLAW_BASE_URL=http://host.docker.internal:18789
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # 持久化生成的 PNG（可选，方便调试）
+      - ./public:/app/public

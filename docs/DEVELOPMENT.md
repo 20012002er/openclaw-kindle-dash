@@ -41,11 +41,22 @@ kindle-dash/
 │   └── next-wakeup/              # Rust 项目：计算 cron 下一次唤醒时间
 │       ├── Cargo.toml
 │       └── src/main.rs
+├── server/                       # 后端服务：抓取 OpenClaw 数据并生成仪表盘 PNG
+│   ├── src/
+│   │   ├── index.js              # HTTP 服务 + 定时任务入口
+│   │   ├── fetch-usage.js        # 从 OpenClaw 抓取 usage 数据
+│   │   ├── render-dashboard.js   # 渲染 e-ink 友好的 HTML 仪表盘
+│   │   └── screenshot.js         # Puppeteer 截图 + 灰度转换
+│   ├── .env.example              # 环境变量模板
+│   ├── Dockerfile                # 容器化部署
+│   ├── docker-compose.yml        # 编排配置
+│   └── package.json
 ├── KUAL/                         # KUAL 扩展配置
 │   └── kindle-dash/
 │       ├── config.xml
 │       └── menu.json
 ├── docs/
+│   ├── DEVELOPMENT.md            # 本文件
 │   ├── tipstricks.md             # 生成仪表盘图片的提示
 │   └── screenshotter/            # Puppeteer 截图参考实现
 │       ├── Dockerfile
@@ -228,6 +239,165 @@ docker run -e URL=https://your-dashboard.example.com \
   ]
 }
 ```
+
+### 5.6 OpenClaw 仪表盘后端服务
+
+本仓库在 `server/` 目录下新增了一个后端服务，用于从 OpenClaw Gateway 抓取 usage 数据，渲染为 e-ink 友好的仪表盘 PNG，通过 HTTP 暴露给 Kindle 拉取。
+
+#### 架构
+
+```
+[阿里云服务器]                              [Kindle Paperwhite]
+┌─────────────────────────┐               ┌──────────────────┐
+│ OpenClaw Gateway :18789 │               │ kindle-dash      │
+│   └ Usage API           │               │  ├ dash.sh       │
+│        ↑                │               │  ├ fetch-dash.sh │── xh GET ──┐
+│  ┌─────┴──────────┐     │               │  └ eips 显示     │            │
+│  │ dash-server     │     │               └──────────────────┘            │
+│  │ (Node+Puppeteer)│     │                                               │
+│  │ 1.抓OpenClaw数据│     │                                               │
+│  │ 2.渲染e-ink HTML│     │                                               │
+│  │ 3.截图灰度PNG   │     │                                               │
+│  │ 4.HTTP /dash.png│ ←──────────────────────────────────────────────────┘
+│  │ 定时每5分钟     │     │
+│  └────────────────┘     │
+└─────────────────────────┘
+```
+
+#### 后端服务文件
+
+| 文件 | 作用 |
+| --- | --- |
+| [server/src/index.js](../server/src/index.js) | HTTP 服务 + 定时任务入口 |
+| [server/src/fetch-usage.js](../server/src/fetch-usage.js) | 从 OpenClaw 抓取 usage 数据（支持 api/mock 模式） |
+| [server/src/render-dashboard.js](../server/src/render-dashboard.js) | 渲染 e-ink 友好的 HTML 仪表盘模板 |
+| [server/src/screenshot.js](../server/src/screenshot.js) | Puppeteer 截图 + 灰度 PNG 转换 |
+| [server/.env.example](../server/.env.example) | 环境变量模板 |
+| [server/Dockerfile](../server/Dockerfile) | 容器化部署 |
+| [server/docker-compose.yml](../server/docker-compose.yml) | Docker 编排 |
+
+#### 部署后端服务（阿里云）
+
+**方式一：Docker（推荐）**
+
+```sh
+cd server
+cp .env.example .env
+# 编辑 .env，填入 OpenClaw 地址、Token 等
+vi .env
+docker compose up -d --build
+```
+
+**方式二：直接运行**
+
+```sh
+cd server
+cp .env.example .env
+vi .env
+npm install
+npm start
+```
+
+服务启动后，可通过以下端点访问：
+- `GET /dash.png` — 仪表盘图片（Kindle 拉取此 URL）
+- `GET /health` — 健康检查
+- `POST /generate` — 手动触发生成
+
+#### 配置项
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `OPENCLAW_BASE_URL` | `http://127.0.0.1:18789` | OpenClaw 网关地址 |
+| `OPENCLAW_AUTH_MODE` | `password` | 认证模式：`token` / `password` / `none`（对应 `gateway.auth.mode`） |
+| `OPENCLAW_CREDENTIAL` | （空） | 网关凭证（token 或 password），统一用 `Authorization: Bearer` 发送 |
+| `OPENCLAW_USAGE_ENDPOINT` | `/api/usage` | Usage API 端点路径 |
+| `FETCH_MODE` | `api` | 数据抓取模式：`api` 或 `mock` |
+| `PORT` | `3000` | HTTP 服务端口 |
+| `GENERATE_CRON` | `*/5 * * * *` | 定时生成 cron（默认每 5 分钟） |
+| `SCREEN_WIDTH` | `1072` | Kindle 屏幕宽度（KPW3 竖屏） |
+| `SCREEN_HEIGHT` | `1448` | Kindle 屏幕高度（KPW3 竖屏） |
+| `PAGE_RENDER_DELAY` | `1000` | 截图前等待渲染毫秒数 |
+
+> **认证说明**：OpenClaw 只有单一凭证（token 或 password），没有用户名概念。不论 `auth.mode` 是 `token` 还是 `password`，请求头格式都是 `Authorization: Bearer <值>`。`OPENCLAW_AUTH_MODE` 主要用于日志展示和 `none` 模式判断，对请求头格式无影响。
+
+#### 联调 Kindle 端
+
+1. 在阿里云上启动后端服务后，确认 `http://你的服务器IP:3000/dash.png` 可访问
+2. 修改 Kindle 上的 [src/local/env.sh](../src/local/env.sh)，设置 `DASHBOARD_URL`：
+   ```sh
+   export DASHBOARD_URL="http://你的服务器IP:3000/dash.png"
+   ```
+3. 修改 `REFRESH_SCHEDULE` 和 `TIMEZONE` 匹配你的需求
+4. 重启 dash：`/mnt/us/dashboard/stop.sh && /mnt/us/dashboard/start.sh`
+
+#### 调试后端服务
+
+```sh
+# 单次生成（不启动 HTTP 服务和定时任务）
+npm run generate
+
+# 用 mock 数据测试（无需连接 OpenClaw）
+FETCH_MODE=mock npm run generate
+
+# 开发模式（文件变更自动重启）
+npm run dev
+
+# 查看渲染的中间 HTML
+ls server/public/dashboard.html
+
+# 手动触发生成
+curl -X POST http://localhost:3000/generate
+```
+
+#### 适配 OpenClaw API
+
+OpenClaw 的 API 可能因版本而异。如果默认的 `/api/usage` 端点不可用：
+
+1. **修改端点**：在 `.env` 中设置 `OPENCLAW_USAGE_ENDPOINT` 为正确路径
+2. **调整数据映射**：修改 [server/src/fetch-usage.js](../server/src/fetch-usage.js) 中的 `normalizeData()` 函数，将你的 API 响应字段映射到仪表盘所需格式
+3. **先用 mock 跑通**：设置 `FETCH_MODE=mock` 先验证整个流程，再切换到 `api` 模式
+
+仪表盘所需的数据结构（`normalizeData` 的输出格式）：
+
+```js
+{
+  timestamp: "ISO 时间字符串",
+  summary: {
+    totalRequests: 1234,      // 总请求数
+    totalTokens: 456789,      // 总 Token 数
+    totalCost: 12.34,         // 总费用（美元）
+    activeSessions: 5,        // 活跃会话数
+    onlineChannels: 3,        // 在线渠道数
+    offlineChannels: 1,       // 离线渠道数
+  },
+  topModels: [                // 模型调用排行（按 requests 降序）
+    { name: "GPT-4", requests: 523, tokens: 234000 },
+  ],
+  channels: [                 // 渠道状态列表
+    { name: "Telegram", status: "online" },  // status: "online" | "offline"
+  ],
+  hourlyTrend: [12, 23, ...], // 最近 24 小时每小时请求数
+}
+```
+
+#### 适配其他 Kindle 设备
+
+修改 `.env` 中的 `SCREEN_WIDTH` 和 `SCREEN_HEIGHT`：
+
+| 设备 | 竖屏（宽×高） | 横屏（宽×高） |
+| --- | --- | --- |
+| Kindle 4 NT | 600×800 | 800×600 |
+| KPW3 第7代 | 1072×1448 | 1448×1072 |
+| KPW5 第11代 | 1264×1680 | 1680×1264 |
+
+#### 自定义仪表盘布局
+
+仪表盘的 HTML 模板在 [server/src/render-dashboard.js](../server/src/render-dashboard.js) 的 `renderHtml()` 函数中。修改其中的 HTML/CSS 即可调整布局、字号、配色等。设计原则：
+
+- 纯黑白灰度，无彩色（e-ink 屏幕只能显示灰度）
+- 高对比度（`#000` 文字 + `#fff` 背景）
+- 大字体（远距离可读）
+- 无外部依赖（不加载远程 CSS/JS/字体，确保截图速度）
 
 ---
 

@@ -1,9 +1,16 @@
 #!/usr/bin/env sh
 
+# ===== 仪表盘图片地址 =====
+# 指向你部署在阿里云上的 kindle-dash-server
+export DASHBOARD_URL=${DASHBOARD_URL:-"http://your-aliyun-server:3000/dash.png"}
+
 # Export environment variables here
 export WIFI_TEST_IP=${WIFI_TEST_IP:-1.1.1.1}
-export REFRESH_SCHEDULE=${REFRESH_SCHEDULE:-"2,32 8-17 * * MON-FRI"}
-export TIMEZONE=${TIMEZONE:-"Europe/Amsterdam"}
+
+# 刷新频率：默认每 10 分钟刷新一次（后端每 5 分钟生成新图片）
+# 可按需调整，如每 5 分钟: "*/5 * * * *"，每小时: "0 * * * *"
+export REFRESH_SCHEDULE=${REFRESH_SCHEDULE:-"*/10 * * * *"}
+export TIMEZONE=${TIMEZONE:-"Asia/Shanghai"}
 
 # By default, partial screen updates are used to update the screen,
 # to prevent the screen from flashing. After a few partial updates,
