@@ -39,14 +39,9 @@ init() {
   echo "Starting dashboard with $REFRESH_SCHEDULE refresh..."
   echo "Detected RTC: ${RTC:-none (will use sleep fallback)}"
 
-  # 停止 Kindle 原生框架（不同型号路径可能不同）
-  if [ -f /etc/init.d/framework ]; then
-    /etc/init.d/framework stop
-  else
-    # KPW7 及较新固件可能用 upstart 或 systemctl
-    initctl stop framework 2>/dev/null
-    systemctl stop framework 2>/dev/null
-  fi
+  # 停止 Kindle 原生框架（KPW7 上 /etc/init.d/framework 不存在，
+  # 报错可忽略——eips 仍可正常工作，不要用 initctl 强行停止，否则会破坏显示）
+  /etc/init.d/framework stop 2>/dev/null
   initctl stop webreader >/dev/null 2>&1
   echo powersave >/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null
   lipc-set-prop com.lab126.powerd preventScreenSaver 1
