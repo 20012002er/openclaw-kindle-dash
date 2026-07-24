@@ -28,18 +28,13 @@ RUN npm install --production
 
 COPY . .
 
-# 预创建输出目录，确保 appuser 有写权限
-RUN mkdir -p /app/public
+# 预创建输出目录，并赋权给 node 用户（node 镜像自带 UID=1000 的 node 用户）
+RUN mkdir -p /app/public /home/node/Downloads \
+    && chown -R node:node /app /home/node
 
-# 创建非特权用户运行 Chromium
-# 固定 UID/GID=1000，与宿主机挂载目录 ./public 权限对齐
-# 宿主机需执行：mkdir -p ./public && chown -R 1000:1000 ./public
-RUN groupadd -r -g 1000 appuser \
-    && useradd -r -u 1000 -g appuser -G audio,video appuser \
-    && mkdir -p /home/appuser/Downloads \
-    && chown -R appuser:appuser /home/appuser \
-    && chown -R appuser:appuser /app
-
-USER appuser
+# 直接复用 node 镜像自带的 node 用户（UID=1000, GID=1000）
+# 与宿主机挂载目录 ./public 权限对齐：
+#   宿主机需执行：mkdir -p ./public && chown -R 1000:1000 ./public
+USER node
 
 CMD ["node", "src/index.js"]
