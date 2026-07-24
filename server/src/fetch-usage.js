@@ -60,10 +60,10 @@ async function connectGateway(ws) {
     role: "operator",
     scopes: ["operator.read"],
     client: {
-      id: "kindle-dash",
+      id: "cli",
       version: "1.0.0",
       platform: "linux",
-      mode: "operator",
+      mode: "cli",
     },
   };
   if (OPENCLAW_CREDENTIAL) {
