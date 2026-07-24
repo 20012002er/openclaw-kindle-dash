@@ -167,21 +167,35 @@ function normalizeData(raw) {
     : [];
   const totals = sessionsRaw?.totals || raw.totals || {};
 
+  // 如果 totals 已有汇总值，直接用；否则才累加 sessions
   let totalTokens = totals.totalTokens || 0;
-  let totalCost = 0;
-  let totalMessages = 0;
+  let totalCost = totals.totalCost || 0;
+  let totalMessages = totals.messageCount || totals.totalMessages || 0;
+  const hasTotals = totalTokens > 0 || totalMessages > 0;
+
+  if (!hasTotals) {
+    sessions.forEach((s) => {
+      const u = s.usage || {};
+      totalTokens += u.totalTokens || 0;
+      totalCost += u.totalCost || 0;
+      totalMessages += u.messageCounts?.total || 0;
+    });
+  }
+
+  // 调试：打印第一个 session 的 modelUsage 结构，帮助确认字段路径
+  if (sessions.length > 0 && sessions[0].usage?.modelUsage) {
+    const sample = sessions[0].usage.modelUsage[0];
+    console.log("Sample modelUsage entry:", JSON.stringify(sample));
+  }
 
   const modelAgg = {};
   const channelAgg = {};
 
   sessions.forEach((s) => {
     const u = s.usage || {};
-    totalTokens += u.totalTokens || 0;
-    totalCost += u.totalCost || 0;
-    totalMessages += u.messageCounts?.total || 0;
 
     const chName =
-      s.origin?.provider || s.origin?.label || s.channel || "unknown";
+      s.origin?.provider || s.origin?.label || s.channel || "direct";
     if (!channelAgg[chName]) {
       channelAgg[chName] = { name: chName, online: false, lastActivity: 0 };
     }
@@ -193,8 +207,15 @@ function normalizeData(raw) {
       u.modelUsage.forEach((m) => {
         const label = m.model || m.provider || "unknown";
         if (!modelAgg[label]) modelAgg[label] = { name: label, tokens: 0, requests: 0 };
-        modelAgg[label].tokens += m.totals?.totalTokens || 0;
-        modelAgg[label].requests += m.count || 0;
+        // 尝试多种可能的 token 字段路径
+        const tokens =
+          m.totals?.totalTokens ||
+          m.totalTokens ||
+          m.tokens ||
+          m.totals?.tokens ||
+          0;
+        modelAgg[label].tokens += tokens;
+        modelAgg[label].requests += m.count || m.requests || 0;
       });
     }
   });
@@ -228,16 +249,19 @@ function normalizeData(raw) {
   const providers = [];
   const statusRaw = raw.status;
   if (statusRaw && typeof statusRaw === "object") {
+    console.log("usage.status raw keys:", Object.keys(statusRaw));
+    console.log("usage.status sample:", JSON.stringify(statusRaw).slice(0, 500));
     const providerList =
-      statusRaw.providers || statusRaw.entries || statusRaw.items || [];
+      statusRaw.providers || statusRaw.entries || statusRaw.items ||
+      statusRaw.usage || statusRaw.accounts || [];
     if (Array.isArray(providerList)) {
       providerList.forEach((p) => {
         providers.push({
-          name: p.provider || p.name || "unknown",
+          name: p.provider || p.name || p.id || "unknown",
           plan: p.plan || p.planName || "",
           remaining: p.remaining != null ? p.remaining : p.remainingPercent,
-          spent: p.spent || p.cost || 0,
-          quota: p.quota || p.limit || 0,
+          spent: p.spent || p.cost || p.usage || 0,
+          quota: p.quota || p.limit || p.budget || 0,
         });
       });
     }
