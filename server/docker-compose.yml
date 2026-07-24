@@ -16,5 +16,7 @@ services:
       # 挂载到宿主机以便查看生成的 PNG。
       # 宿主机 ./public 目录必须存在且 node 用户(UID 1000) 有写权限。
       # 首次启动前请在宿主机执行：
-      #   mkdir -p ./public && chown -R 1000:1000 ./public
+      #   mkdir -p ./public ./data && chown -R 1000:1000 ./public ./data
       - ./public:/app/public
+      # 挂载数据目录，持久化管理页面设置（模板选择、天气城市、Notion 配置等）
+      - ./data:/app/data

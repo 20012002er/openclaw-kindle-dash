@@ -28,13 +28,13 @@ RUN npm install --production
 
 COPY . .
 
-# 预创建输出目录，并赋权给 node 用户（node 镜像自带 UID=1000 的 node 用户）
-RUN mkdir -p /app/public /home/node/Downloads \
+# 预创建输出目录和数据目录，并赋权给 node 用户（node 镜像自带 UID=1000 的 node 用户）
+RUN mkdir -p /app/public /app/data /home/node/Downloads \
     && chown -R node:node /app /home/node
 
 # 直接复用 node 镜像自带的 node 用户（UID=1000, GID=1000）
 # 与宿主机挂载目录 ./public 权限对齐：
-#   宿主机需执行：mkdir -p ./public && chown -R 1000:1000 ./public
+#   宿主机需执行：mkdir -p ./public ./data && chown -R 1000:1000 ./public ./data
 USER node
 
 CMD ["node", "src/index.js"]

@@ -2,8 +2,8 @@ const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const { PNG } = require("pngjs");
-const { fetchUsage } = require("./fetch-usage");
-const { renderDashboard } = require("./render-dashboard");
+const { getSettings } = require("./settings");
+const { getTemplate } = require("./templates");
 
 const SCREEN_WIDTH = parseInt(process.env.SCREEN_WIDTH || "1072", 10);
 const SCREEN_HEIGHT = parseInt(process.env.SCREEN_HEIGHT || "1448", 10);
@@ -19,21 +19,27 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * 完整的仪表盘生成流程：
- *   1. 从 OpenClaw 抓取 usage 数据
- *   2. 渲染为 e-ink 友好的 HTML
- *   3. 用 Puppeteer 截图
- *   4. 转为灰度 PNG（e-ink 屏幕要求）
+ *   1. 读取设置，选择活跃模板
+ *   2. 用模板获取数据
+ *   3. 用模板渲染 HTML
+ *   4. 用 Puppeteer 截图
+ *   5. 转为灰度 PNG（e-ink 屏幕要求）
  */
 async function generateDashboard() {
-  // 1. 抓取数据
-  const data = await fetchUsage();
+  // 1. 读取设置，选择模板
+  const settings = getSettings();
+  const template = getTemplate(settings.activeTemplate);
+  console.log(`Using template: ${template.name} (${template.id})`);
+
+  // 2. 获取数据
+  const data = await template.fetchData(settings);
   console.log(
-    "Usage data fetched:",
-    JSON.stringify(data.summary || data)
+    "Data fetched:",
+    JSON.stringify(data.summary || data.timestamp || "ok").slice(0, 200)
   );
 
-  // 2. 渲染 HTML
-  const htmlPath = renderDashboard(data);
+  // 3. 渲染 HTML
+  const htmlPath = template.render(data);
   console.log("HTML rendered:", htmlPath);
 
   // 3. Puppeteer 截图

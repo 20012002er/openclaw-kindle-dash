@@ -1,4 +1,5 @@
 const express = require("express");
+const session = require("express-session");
 const path = require("path");
 const fs = require("fs");
 const cron = require("node-cron");
@@ -6,17 +7,32 @@ require("dotenv").config();
 
 const { generateDashboard } = require("./screenshot");
 const { fetchUsage } = require("./fetch-usage");
+const { getSettings, saveSettings } = require("./settings");
+const { requireAuth, login, logout } = require("./auth");
+const { listTemplates } = require("./templates");
 
 const PORT = process.env.PORT || 3000;
 const OUTPUT_FILE = path.resolve(process.env.OUTPUT_FILE || "public/dash.png");
 const GENERATE_CRON = process.env.GENERATE_CRON || "*/5 * * * *";
 const RUN_ONCE = process.argv.includes("--once");
+const SESSION_SECRET =
+  process.env.SESSION_SECRET || "kindle-dash-secret-change-me";
 
 const app = express();
 const PUBLIC_DIR = path.dirname(OUTPUT_FILE);
 
 fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 
+// 中间件
+app.use(express.json());
+app.use(
+  session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 24 * 60 * 60 * 1000 }, // 24小时
+  })
+);
 app.use(express.static(PUBLIC_DIR));
 
 // 主图片端点：Kindle 通过 xh 拉取此 URL
@@ -57,6 +73,47 @@ app.get("/debug", async (req, res) => {
   }
 });
 
+// ===== 管理页面 =====
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "admin.html"));
+});
+
+// 登录/登出
+app.post("/api/login", login);
+app.post("/api/logout", logout);
+
+// 获取当前模板列表 + 设置（需认证）
+app.get("/api/settings", requireAuth, (req, res) => {
+  const settings = getSettings();
+  const templates = listTemplates();
+  res.json({ settings, templates });
+});
+
+// 保存设置（需认证）
+app.put("/api/settings", requireAuth, (req, res) => {
+  const { activeTemplate, weather, notion } = req.body || {};
+  const current = getSettings();
+  const updated = saveSettings({
+    activeTemplate: activeTemplate || current.activeTemplate,
+    weather: weather || current.weather,
+    notion: notion || current.notion,
+  });
+  res.json({ ok: true, settings: updated });
+});
+
+// 测试某个模板的数据获取（需认证）
+app.get("/api/test/:templateId", requireAuth, async (req, res) => {
+  try {
+    const { getTemplate } = require("./templates");
+    const template = getTemplate(req.params.templateId);
+    const settings = getSettings();
+    const data = await template.fetchData(settings);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 async function main() {
   if (RUN_ONCE) {
     console.log("Generating dashboard once...");
@@ -88,8 +145,8 @@ async function main() {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Kindle dash server listening on http://0.0.0.0:${PORT}`);
     console.log(`  Dashboard PNG: http://localhost:${PORT}/dash.png`);
+    console.log(`  Admin page:    http://localhost:${PORT}/admin`);
     console.log(`  Health check:  http://localhost:${PORT}/health`);
-    console.log(`  Debug data:    http://localhost:${PORT}/debug`);
     console.log(`  Cron schedule: ${GENERATE_CRON}`);
   });
 }
