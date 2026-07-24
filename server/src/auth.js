@@ -11,15 +11,6 @@ function requireAuth(req, res, next) {
 function login(req, res) {
   const username = (req.body && req.body.username || "").trim();
   const password = (req.body && req.body.password || "").trim();
-  console.log("Login attempt:", {
-    inputUsername: JSON.stringify(username),
-    inputPasswordLen: password.length,
-    expectedUsername: JSON.stringify(ADMIN_USERNAME),
-    expectedPasswordLen: ADMIN_PASSWORD.length,
-    usernameMatch: username === ADMIN_USERNAME,
-    passwordMatch: password === ADMIN_PASSWORD,
-    bodyKeys: req.body ? Object.keys(req.body) : "no body",
-  });
   if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
     req.session.authed = true;
     res.json({ ok: true });

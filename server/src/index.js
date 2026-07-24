@@ -66,7 +66,8 @@ app.post("/generate", async (req, res) => {
 // 调试端点：返回标准化后的 usage 数据（不生成图片）
 app.get("/debug", async (req, res) => {
   try {
-    const data = await fetchUsage();
+    const settings = getSettings();
+    const data = await fetchUsage(settings);
     res.json(data);
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
@@ -92,10 +93,11 @@ app.get("/api/settings", requireAuth, (req, res) => {
 
 // 保存设置（需认证）
 app.put("/api/settings", requireAuth, (req, res) => {
-  const { activeTemplate, weather, notion } = req.body || {};
+  const { activeTemplate, openclaw, weather, notion } = req.body || {};
   const current = getSettings();
   const updated = saveSettings({
     activeTemplate: activeTemplate || current.activeTemplate,
+    openclaw: openclaw || current.openclaw,
     weather: weather || current.weather,
     notion: notion || current.notion,
   });

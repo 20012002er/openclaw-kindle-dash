@@ -1,8 +1,8 @@
 const WebSocket = require("ws");
 
-const OPENCLAW_BASE_URL =
-  process.env.OPENCLAW_BASE_URL || "http://127.0.0.1:18789";
-const OPENCLAW_CREDENTIAL = process.env.OPENCLAW_CREDENTIAL || "";
+const ENV_BASE_URL = process.env.OPENCLAW_BASE_URL || "http://127.0.0.1:18789";
+const ENV_CREDENTIAL = process.env.OPENCLAW_CREDENTIAL || "";
+const ENV_AUTH_MODE = process.env.OPENCLAW_AUTH_MODE || "password";
 const FETCH_MODE = process.env.FETCH_MODE || "api";
 
 /**
@@ -52,8 +52,10 @@ function wsRpc(ws, method, params, timeout = 15000) {
 
 /**
  * 连接 OpenClaw Gateway WebSocket 并完成握手认证。
+ * @param {WebSocket} ws
+ * @param {{authMode:string, credential:string}} connConfig
  */
-async function connectGateway(ws) {
+async function connectGateway(ws, connConfig) {
   const params = {
     minProtocol: 4,
     maxProtocol: 4,
@@ -66,8 +68,15 @@ async function connectGateway(ws) {
       mode: "cli",
     },
   };
-  if (OPENCLAW_CREDENTIAL) {
-    params.auth = { password: OPENCLAW_CREDENTIAL };
+  const cred = (connConfig && connConfig.credential || "").trim();
+  const mode = (connConfig && connConfig.authMode || "password").trim();
+  if (cred && mode !== "none") {
+    // token 模式用 auth.token，password 模式用 auth.password
+    if (mode === "token") {
+      params.auth = { token: cred };
+    } else {
+      params.auth = { password: cred };
+    }
   }
   const result = await wsRpc(ws, "connect", params, 10000);
   return result;
@@ -77,9 +86,10 @@ async function connectGateway(ws) {
  * 通过 WebSocket RPC 抓取 usage 数据。
  * 调用 sessions.usage（会话级用量）和 usage.status（provider 配额）。
  */
-async function fetchFromApi() {
-  const wsUrl = getWsUrl(OPENCLAW_BASE_URL);
-  console.log(`Connecting to OpenClaw gateway WS: ${wsUrl}`);
+async function fetchFromApi(connConfig) {
+  const baseUrl = (connConfig && connConfig.baseUrl || ENV_BASE_URL).trim();
+  const wsUrl = getWsUrl(baseUrl);
+  console.log(`Connecting to OpenClaw gateway WS: ${wsUrl} (auth: ${connConfig && connConfig.authMode || ENV_AUTH_MODE})`);
 
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
@@ -92,7 +102,7 @@ async function fetchFromApi() {
       clearTimeout(connectTimeout);
       try {
         console.log("WS connected, authenticating...");
-        await connectGateway(ws);
+        await connectGateway(ws, connConfig);
         console.log("Authenticated, fetching usage data...");
 
         // 并行调用 sessions.usage 和 usage.status
@@ -326,17 +336,30 @@ function normalizeData(raw) {
   };
 }
 
-async function fetchUsage() {
+async function fetchUsage(settings) {
+  // 优先使用 settings 中的 openclaw 配置，回退到环境变量
+  const connConfig = settings && settings.openclaw
+    ? {
+        baseUrl: settings.openclaw.baseUrl || ENV_BASE_URL,
+        authMode: settings.openclaw.authMode || ENV_AUTH_MODE,
+        credential: settings.openclaw.credential || ENV_CREDENTIAL,
+      }
+    : {
+        baseUrl: ENV_BASE_URL,
+        authMode: ENV_AUTH_MODE,
+        credential: ENV_CREDENTIAL,
+      };
+
   if (FETCH_MODE === "mock") {
     console.log("Using mock data");
     return getMockData();
   }
   try {
-    const raw = await fetchFromApi();
+    const raw = await fetchFromApi(connConfig);
     return normalizeData(raw);
   } catch (err) {
     console.error(`WS fetch failed: ${err.message}`);
-    console.error("Falling back to empty data. Check OPENCLAW_BASE_URL and OPENCLAW_CREDENTIAL.");
+    console.error("Falling back to empty data. Check openclaw settings in admin page.");
     return getMockData();
   }
 }

@@ -6,6 +6,11 @@ const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 
 const DEFAULT_SETTINGS = {
   activeTemplate: "openclaw",
+  openclaw: {
+    baseUrl: process.env.OPENCLAW_BASE_URL || "http://127.0.0.1:18789",
+    authMode: process.env.OPENCLAW_AUTH_MODE || "password", // "password" | "token" | "none"
+    credential: process.env.OPENCLAW_CREDENTIAL || "",
+  },
   weather: {
     city: "武汉",
   },
@@ -34,6 +39,7 @@ function getSettings() {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
+      openclaw: { ...DEFAULT_SETTINGS.openclaw, ...(parsed.openclaw || {}) },
       weather: { ...DEFAULT_SETTINGS.weather, ...(parsed.weather || {}) },
       notion: { ...DEFAULT_SETTINGS.notion, ...(parsed.notion || {}) },
     };
@@ -48,6 +54,7 @@ function saveSettings(newSettings) {
   const merged = {
     ...DEFAULT_SETTINGS,
     ...newSettings,
+    openclaw: { ...DEFAULT_SETTINGS.openclaw, ...(newSettings.openclaw || {}) },
     weather: { ...DEFAULT_SETTINGS.weather, ...(newSettings.weather || {}) },
     notion: { ...DEFAULT_SETTINGS.notion, ...(newSettings.notion || {}) },
   };
