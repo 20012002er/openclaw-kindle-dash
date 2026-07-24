@@ -74,8 +74,9 @@ app.get("/debug", async (req, res) => {
 });
 
 // ===== 管理页面 =====
+// admin.html 放在 src/ 目录下（不被 ./public 挂载覆盖）
 app.get("/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "admin.html"));
+  res.sendFile(path.join(__dirname, "admin.html"));
 });
 
 // 登录/登出

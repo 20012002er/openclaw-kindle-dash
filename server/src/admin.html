@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kindle Dashboard 管理</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+  .container { max-width: 600px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 28px; margin-bottom: 24px; }
+  .card { background: #fff; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .card h2 { font-size: 18px; margin-bottom: 16px; color: #555; }
+  label { display: block; font-size: 14px; color: #666; margin-bottom: 6px; font-weight: 600; }
+  input[type="text"], input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; margin-bottom: 16px; }
+  input:focus { outline: none; border-color: #4a90d9; }
+  .radio-group { margin-bottom: 16px; }
+  .radio-item { display: flex; align-items: center; padding: 12px 16px; border: 2px solid #eee; border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+  .radio-item.active { border-color: #4a90d9; background: #f0f7ff; }
+  .radio-item input { margin-right: 12px; }
+  .radio-item .radio-name { font-size: 16px; font-weight: 600; }
+  .btn { display: inline-block; padding: 10px 24px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: #4a90d9; color: #fff; }
+  .btn-secondary { background: #eee; color: #333; margin-left: 8px; }
+  .btn:hover { opacity: 0.85; }
+  .msg { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+  .msg-ok { background: #d4edda; color: #155724; }
+  .msg-err { background: #f8d7da; color: #721c24; }
+  .hidden { display: none; }
+  .preview-link { display: inline-block; margin-top: 8px; color: #4a90d9; font-size: 14px; text-decoration: none; }
+  .logout { float: right; font-size: 14px; color: #999; cursor: pointer; }
+  .test-result { font-size: 13px; color: #666; margin-top: 8px; max-height: 200px; overflow: auto; background: #f9f9f9; padding: 10px; border-radius: 6px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 登录页 -->
+  <div id="loginView">
+    <h1>Kindle Dashboard 管理</h1>
+    <div class="card">
+      <h2>登录</h2>
+      <div id="loginMsg"></div>
+      <label>用户名</label>
+      <input type="text" id="username" placeholder="admin">
+      <label>密码</label>
+      <input type="password" id="password" placeholder="输入密码">
+      <button class="btn btn-primary" onclick="doLogin()">登录</button>
+    </div>
+  </div>
+
+  <!-- 管理页 -->
+  <div id="adminView" class="hidden">
+    <h1>Kindle Dashboard 管理 <span class="logout" onclick="doLogout()">退出</span></h1>
+
+    <div id="globalMsg"></div>
+
+    <div class="card">
+      <h2>仪表盘模板</h2>
+      <div class="radio-group" id="templateList"></div>
+      <button class="btn btn-secondary" onclick="testTemplate()">测试数据获取</button>
+      <div id="testResult" class="test-result hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>天气配置</h2>
+      <label>城市</label>
+      <input type="text" id="weatherCity" placeholder="武汉">
+    </div>
+
+    <div class="card">
+      <h2>Notion 待办配置</h2>
+      <label>API Key</label>
+      <input type="text" id="notionKey" placeholder="ntn_xxx">
+      <label>Database ID</label>
+      <input type="text" id="notionDb" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    </div>
+
+    <div class="card">
+      <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+      <button class="btn btn-secondary" onclick="generateNow()">立即生成</button>
+      <a class="preview-link" href="/dash.png" target="_blank">查看当前图片 →</a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let token = null;
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.message || 'Request failed');
+  return data;
+}
+
+function showMsg(id, text, ok) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<div class="msg ${ok ? 'msg-ok' : 'msg-err'}">${text}</div>`;
+  setTimeout(() => { el.innerHTML = ''; }, 4000);
+}
+
+async function doLogin() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  try {
+    await api('/api/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    document.getElementById('loginView').classList.add('hidden');
+    document.getElementById('adminView').classList.remove('hidden');
+    loadSettings();
+  } catch (e) {
+    showMsg('loginMsg', e.message, false);
+  }
+}
+
+async function doLogout() {
+  await api('/api/logout', { method: 'POST' }).catch(()=>{});
+  location.reload();
+}
+
+let templates = [];
+let currentTemplate = '';
+
+async function loadSettings() {
+  try {
+    const data = await api('/api/settings');
+    templates = data.templates;
+    const s = data.settings;
+    currentTemplate = s.activeTemplate;
+
+    const list = document.getElementById('templateList');
+    list.innerHTML = templates.map(t => `
+      <div class="radio-item ${t.id === currentTemplate ? 'active' : ''}" onclick="selectTemplate('${t.id}')">
+        <input type="radio" name="tpl" ${t.id === currentTemplate ? 'checked' : ''}>
+        <span class="radio-name">${t.name}</span>
+      </div>`).join('');
+
+    document.getElementById('weatherCity').value = (s.weather && s.weather.city) || '';
+    document.getElementById('notionKey').value = (s.notion && s.notion.apiKey) || '';
+    document.getElementById('notionDb').value = (s.notion && s.notion.dbId) || '';
+  } catch (e) {
+    showMsg('globalMsg', '加载设置失败: ' + e.message, false);
+  }
+}
+
+function selectTemplate(id) {
+  currentTemplate = id;
+  document.querySelectorAll('.radio-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+
+async function saveSettings() {
+  try {
+    await api('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        activeTemplate: currentTemplate,
+        weather: { city: document.getElementById('weatherCity').value },
+        notion: {
+          apiKey: document.getElementById('notionKey').value,
+          dbId: document.getElementById('notionDb').value
+        }
+      })
+    });
+    showMsg('globalMsg', '设置已保存', true);
+  } catch (e) {
+    showMsg('globalMsg', '保存失败: ' + e.message, false);
+  }
+}
+
+async function generateNow() {
+  try {
+    showMsg('globalMsg', '正在生成...', true);
+    await api('/generate', { method: 'POST' });
+    showMsg('globalMsg', '生成完成', true);
+  } catch (e) {
+    showMsg('globalMsg', '生成失败: ' + e.message, false);
+  }
+}
+
+async function testTemplate() {
+  const el = document.getElementById('testResult');
+  el.classList.remove('hidden');
+  el.textContent = '测试中...';
+  try {
+    const data = await api(`/api/test/${currentTemplate}`);
+    el.textContent = JSON.stringify(data.data, null, 2);
+  } catch (e) {
+    el.textContent = '错误: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>
