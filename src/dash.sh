@@ -10,7 +10,18 @@ LOW_BATTERY_CMD="$DIR/local/low-battery.sh"
 REFRESH_SCHEDULE=${REFRESH_SCHEDULE:-"2,32 8-17 * * MON-FRI"}
 FULL_DISPLAY_REFRESH_RATE=${FULL_DISPLAY_REFRESH_RATE:-0}
 SLEEP_SCREEN_INTERVAL=${SLEEP_SCREEN_INTERVAL:-3600}
-RTC=/sys/devices/platform/mxc_rtc.0/wakeup_enable
+
+# 自动检测 RTC 唤醒路径（不同 Kindle 型号路径不同）
+detect_rtc() {
+  for path in \
+    /sys/devices/platform/mxc_rtc.0/wakeup_enable \
+    /sys/devices/platform/mxc_rtc.1/wakeup_enable \
+    /sys/class/rtc/rtc0/wakealarm; do
+    [ -f "$path" ] && echo "$path" && return
+  done
+  echo ""
+}
+RTC=$(detect_rtc)
 
 LOW_BATTERY_REPORTING=${LOW_BATTERY_REPORTING:-false}
 LOW_BATTERY_THRESHOLD_PERCENT=${LOW_BATTERY_THRESHOLD_PERCENT:-10}
@@ -26,10 +37,18 @@ init() {
   fi
 
   echo "Starting dashboard with $REFRESH_SCHEDULE refresh..."
+  echo "Detected RTC: ${RTC:-none (will use sleep fallback)}"
 
-  /etc/init.d/framework stop
+  # 停止 Kindle 原生框架（不同型号路径可能不同）
+  if [ -f /etc/init.d/framework ]; then
+    /etc/init.d/framework stop
+  else
+    # KPW7 及较新固件可能用 upstart 或 systemctl
+    initctl stop framework 2>/dev/null
+    systemctl stop framework 2>/dev/null
+  fi
   initctl stop webreader >/dev/null 2>&1
-  echo powersave >/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+  echo powersave >/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null
   lipc-set-prop com.lab126.powerd preventScreenSaver 1
 }
 
@@ -88,10 +107,25 @@ rtc_sleep() {
 
   if [ "$DEBUG" = true ]; then
     sleep "$duration"
+  elif [ -z "$RTC" ]; then
+    # 无 RTC 唤醒支持，用 sleep 兜底（不真正休眠，耗电但能工作）
+    echo "No RTC available, using sleep fallback for ${duration}s"
+    sleep "$duration"
   else
-    # shellcheck disable=SC2039
-    [ "$(cat "$RTC")" -eq 0 ] && echo -n "$duration" >"$RTC"
-    echo "mem" >/sys/power/state
+    case "$RTC" in
+      */wakealarm)
+        # /sys/class/rtc/rtc0/wakealarm 接受相对时间（+秒数）
+        echo 0 > "$RTC" 2>/dev/null
+        echo "+$duration" > "$RTC" 2>/dev/null
+        echo "mem" >/sys/power/state
+        ;;
+      *)
+        # mxc_rtc.N/wakeup_enable 接受相对秒数
+        rtc_val=$(cat "$RTC" 2>/dev/null)
+        [ "$rtc_val" = "0" ] 2>/dev/null && echo -n "$duration" >"$RTC" 2>/dev/null
+        echo "mem" >/sys/power/state
+        ;;
+    esac
   fi
 }
 
