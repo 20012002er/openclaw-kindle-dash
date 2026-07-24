@@ -306,15 +306,19 @@ function normalizeData(raw) {
     hourlyTrend = hourly;
   }
 
-  let dataTimestamp = new Date().toISOString();
+  // 顶部时间戳用当前生成时间（每次都更新）
+  // 额外保留 dataUpdatedAt 表示数据最后活动时间
+  const generatedAt = new Date().toISOString();
+  let dataUpdatedAt = "";
   const lastUpd = sessions.reduce((max, s) => {
     const t = s.updatedAt || s.usage?.lastActivity || 0;
     return t > max ? t : max;
   }, 0);
-  if (lastUpd) dataTimestamp = new Date(lastUpd).toISOString();
+  if (lastUpd) dataUpdatedAt = new Date(lastUpd).toISOString();
 
   return {
-    timestamp: dataTimestamp,
+    timestamp: generatedAt,
+    dataUpdatedAt,
     summary: {
       totalRequests: totalMessages,
       totalTokens,

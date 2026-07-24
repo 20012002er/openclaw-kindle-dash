@@ -285,7 +285,7 @@ function renderHtml(data) {
       : ""
   }
 
-  <div class="footer">OpenClaw · lazybeartoby</div>
+  <div class="footer">OpenClaw · lazybeartoby${data.dataUpdatedAt ? ` · 数据更新于 ${formatTime(data.dataUpdatedAt)}` : ""}</div>
 
 </body>
 </html>`;
