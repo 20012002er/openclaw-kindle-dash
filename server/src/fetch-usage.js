@@ -167,12 +167,12 @@ function normalizeData(raw) {
     : [];
   const totals = sessionsRaw?.totals || raw.totals || {};
 
-  // 如果 totals 已有汇总值，直接用；否则才累加 sessions
-  let totalTokens = totals.totalTokens || 0;
-  let totalCost = totals.totalCost || 0;
-  // messages 始终从 sessions 累加（totals 中通常不含此字段）
+  // totalTokens/totalCost 优先用 totals（OpenClaw 自己的汇总，稳定）
+  // messages 只能从 sessions 累加（totals 里没有此字段）
+  const hasTotals = totals && totals.totalTokens != null;
+  let totalTokens = hasTotals ? totals.totalTokens : 0;
+  let totalCost = hasTotals ? totals.totalCost || 0 : 0;
   let totalMessages = 0;
-  const hasTotals = totalTokens > 0;
 
   sessions.forEach((s) => {
     const u = s.usage || {};

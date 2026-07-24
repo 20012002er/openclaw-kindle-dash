@@ -49,11 +49,7 @@ function renderTopModels(models) {
 function renderChannels(channels) {
   if (!channels || channels.length === 0)
     return '<div class="empty">No channels</div>';
-  // 过滤掉没有任何活动的 channel
-  const active = channels.filter((ch) => ch.lastActivity > 0);
-  if (active.length === 0)
-    return '<div class="empty">No active channels</div>';
-  return active
+  return channels
     .map((ch) => {
       const isOnline = !!ch.online;
       const lastSeen = ch.lastActivity
