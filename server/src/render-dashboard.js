@@ -279,7 +279,7 @@ function renderHtml(data) {
       : ""
   }
 
-  <div class="footer">OpenClaw · kindle-dash</div>
+  <div class="footer">OpenClaw · lazybeartoby</div>
 
 </body>
 </html>`;
