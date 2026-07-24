@@ -59,6 +59,12 @@ async function connectGateway(ws) {
     maxProtocol: 4,
     role: "operator",
     scopes: ["operator.read"],
+    client: {
+      id: "kindle-dash",
+      version: "1.0.0",
+      platform: "linux",
+      mode: "operator",
+    },
   };
   if (OPENCLAW_CREDENTIAL) {
     params.auth = { password: OPENCLAW_CREDENTIAL };
