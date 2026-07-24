@@ -88,7 +88,32 @@ app.post("/api/logout", logout);
 app.get("/api/settings", requireAuth, (req, res) => {
   const settings = getSettings();
   const templates = listTemplates();
-  res.json({ settings, templates });
+  // 计算下次定时生成时间（基于 GENERATE_CRON）
+  let nextRun = null;
+  try {
+    const cron = process.env.GENERATE_CRON || "*/5 * * * *";
+    const parts = cron.trim().split(/\s+/);
+    // 简单处理 */N 分钟的场景
+    const minutePart = parts[0];
+    const now = new Date();
+    if (minutePart.startsWith("*/")) {
+      const interval = parseInt(minutePart.slice(2)) || 5;
+      const next = new Date(now);
+      const min = now.getMinutes();
+      const nextMin = Math.ceil(min / interval) * interval;
+      if (nextMin >= 60) {
+        next.setHours(next.getHours() + 1, nextMin - 60, 0, 0);
+      } else {
+        next.setMinutes(nextMin, 0, 0);
+      }
+      nextRun = next.toLocaleTimeString("zh-CN", { hour12: false });
+    } else {
+      nextRun = cron;
+    }
+  } catch (e) {
+    nextRun = null;
+  }
+  res.json({ settings, templates, nextRun });
 });
 
 // 保存设置（需认证）

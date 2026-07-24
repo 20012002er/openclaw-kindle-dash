@@ -2,7 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4f46e5">
 <title>Kindle Dashboard 管理</title>
 <style>
   :root {
@@ -10,54 +11,70 @@
     --primary-light: #eef2ff;
     --primary-dark: #4338ca;
     --success: #10b981;
+    --success-light: #d1fae5;
     --danger: #ef4444;
+    --danger-light: #fee2e2;
     --warning: #f59e0b;
+    --warning-light: #fef3c7;
     --gray-50: #f9fafb;
     --gray-100: #f3f4f6;
     --gray-200: #e5e7eb;
     --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
     --gray-500: #6b7280;
+    --gray-600: #4b5563;
     --gray-700: #374151;
+    --gray-800: #1f2937;
     --gray-900: #111827;
     --radius: 12px;
     --radius-sm: 8px;
+    --radius-xs: 6px;
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
     --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05);
     --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
     --transition: all 0.2s ease;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     background: var(--gray-50);
     color: var(--gray-900);
     line-height: 1.6;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   /* ===== 顶部导航栏 ===== */
   .navbar {
     background: #fff;
     border-bottom: 1px solid var(--gray-200);
-    padding: 14px 24px;
+    padding: 0 20px;
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-xs);
+    height: 60px;
   }
   .navbar-inner {
     max-width: 1400px;
     margin: 0 auto;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
   }
   .navbar-brand {
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 700;
     color: var(--gray-900);
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
   }
   .navbar-brand .logo {
     width: 32px;
@@ -68,49 +85,72 @@
     align-items: center;
     justify-content: center;
     color: #fff;
-    font-size: 18px;
+    font-size: 16px;
+    font-weight: 800;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
   }
-  .navbar-actions { display: flex; align-items: center; gap: 12px; }
+  .navbar-brand .brand-text {
+    display: none;
+  }
+  @media (min-width: 600px) {
+    .navbar-brand .brand-text { display: inline; }
+  }
+  .navbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
   .navbar-link {
     color: var(--gray-500);
-    font-size: 14px;
+    font-size: 13px;
     text-decoration: none;
+    padding: 8px 12px;
+    border-radius: var(--radius-xs);
     transition: var(--transition);
+    white-space: nowrap;
   }
-  .navbar-link:hover { color: var(--primary); }
+  .navbar-link:hover { color: var(--primary); background: var(--primary-light); }
 
   /* ===== 容器 ===== */
   .container {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 24px;
+    padding: 16px;
+  }
+  @media (min-width: 768px) {
+    .container { padding: 24px; }
   }
 
   /* ===== 登录页 ===== */
   .login-wrap {
-    min-height: calc(100vh - 61px);
+    min-height: calc(100vh - 60px);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px;
-    background: linear-gradient(135deg, #f9fafb 0%, #eef2ff 100%);
+    padding: 20px;
+    background: linear-gradient(135deg, #f9fafb 0%, #eef2ff 50%, #faf5ff 100%);
   }
   .login-card {
     background: #fff;
     border-radius: 20px;
-    padding: 40px;
+    padding: 32px 24px;
     width: 100%;
     max-width: 400px;
     box-shadow: var(--shadow-lg);
   }
+  @media (min-width: 480px) {
+    .login-card { padding: 40px; }
+  }
   .login-card h1 {
-    font-size: 24px;
-    margin-bottom: 8px;
+    font-size: 22px;
+    margin-bottom: 6px;
     text-align: center;
+    color: var(--gray-900);
   }
   .login-card .subtitle {
     color: var(--gray-500);
-    font-size: 14px;
+    font-size: 13px;
     text-align: center;
     margin-bottom: 28px;
   }
@@ -126,25 +166,34 @@
   }
   .form-input, .form-select {
     width: 100%;
-    padding: 11px 14px;
+    padding: 10px 14px;
     border: 1.5px solid var(--gray-200);
     border-radius: var(--radius-sm);
-    font-size: 15px;
+    font-size: 14px;
     font-family: inherit;
     background: #fff;
     color: var(--gray-900);
     transition: var(--transition);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .form-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7280' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
   }
   .form-input:focus, .form-select:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
   }
-  .form-input::placeholder { color: var(--gray-300); }
+  .form-input::placeholder { color: var(--gray-400); }
   .form-hint {
     font-size: 12px;
     color: var(--gray-500);
     margin-top: 5px;
+    line-height: 1.5;
   }
 
   /* ===== 按钮 ===== */
@@ -153,22 +202,26 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 10px 18px;
+    padding: 9px 16px;
     border: none;
     border-radius: var(--radius-sm);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
     transition: var(--transition);
     text-decoration: none;
     white-space: nowrap;
+    user-select: none;
   }
+  .btn:active { transform: scale(0.97); }
   .btn-primary {
     background: var(--primary);
     color: #fff;
+    box-shadow: 0 1px 2px rgba(79, 70, 229, 0.3);
   }
-  .btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+  .btn-primary:hover { background: var(--primary-dark); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4); }
+  .btn-primary:disabled { background: var(--gray-300); cursor: not-allowed; box-shadow: none; }
   .btn-secondary {
     background: var(--gray-100);
     color: var(--gray-700);
@@ -179,18 +232,22 @@
     color: var(--gray-500);
     padding: 8px 12px;
   }
-  .btn-ghost:hover { color: var(--danger); background: rgba(239, 68, 68, 0.05); }
+  .btn-ghost:hover { color: var(--danger); background: var(--danger-light); }
   .btn-block { width: 100%; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
 
   /* ===== 主布局：左右分栏 ===== */
   .admin-layout {
     display: grid;
-    grid-template-columns: 360px 1fr;
-    gap: 24px;
+    grid-template-columns: 1fr;
+    gap: 16px;
     align-items: start;
   }
-  @media (max-width: 900px) {
-    .admin-layout { grid-template-columns: 1fr; }
+  @media (min-width: 1024px) {
+    .admin-layout {
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+    }
   }
 
   /* ===== 卡片 ===== */
@@ -199,30 +256,85 @@
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     overflow: hidden;
+    border: 1px solid var(--gray-100);
   }
   .card-header {
-    padding: 18px 22px;
+    padding: 16px 20px;
     border-bottom: 1px solid var(--gray-100);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--gray-900);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
   }
-  .card-body { padding: 20px 22px; }
+  .card-body { padding: 18px 20px; }
+
+  /* ===== 当前模板状态卡片（高亮显示） ===== */
+  .status-card {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    border: none;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+  }
+  .status-card .card-header {
+    color: rgba(255,255,255,0.85);
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    padding: 14px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .status-card .card-body { padding: 20px; }
+  .status-tpl-name {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .status-tpl-icon {
+    font-size: 26px;
+  }
+  .status-tpl-desc {
+    font-size: 13px;
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 14px;
+  }
+  .status-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.85);
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+  .status-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .status-meta-item strong {
+    color: #fff;
+    font-weight: 600;
+  }
 
   /* ===== 模板选择列表 ===== */
-  .tpl-list { display: flex; flex-direction: column; gap: 10px; }
+  .tpl-list { display: flex; flex-direction: column; gap: 8px; }
   .tpl-item {
     display: flex;
     align-items: center;
-    padding: 16px;
+    padding: 14px;
     border: 2px solid var(--gray-200);
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: var(--transition);
     position: relative;
+    background: #fff;
   }
   .tpl-item:hover {
     border-color: var(--primary);
@@ -236,30 +348,32 @@
   .tpl-item.active::after {
     content: "✓";
     position: absolute;
-    right: 16px;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
     color: var(--primary);
     font-size: 18px;
     font-weight: 700;
   }
   .tpl-icon {
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
     border-radius: 10px;
     background: var(--gray-100);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
-    margin-right: 14px;
+    font-size: 18px;
+    margin-right: 12px;
     flex-shrink: 0;
   }
   .tpl-item.active .tpl-icon {
     background: var(--primary);
     color: #fff;
   }
-  .tpl-info { flex: 1; min-width: 0; }
+  .tpl-info { flex: 1; min-width: 0; padding-right: 24px; }
   .tpl-name {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--gray-900);
     margin-bottom: 2px;
@@ -267,65 +381,176 @@
   .tpl-desc {
     font-size: 12px;
     color: var(--gray-500);
+    line-height: 1.4;
   }
 
-  /* ===== 配置区段标题 ===== */
+  /* ===== 配置区段 ===== */
   .config-section {
     display: none;
   }
   .config-section.visible {
     display: block;
-    animation: fadeIn 0.2s ease;
+    animation: fadeIn 0.25s ease;
   }
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(4px); }
+    from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
   }
   .config-section-title {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     color: var(--gray-500);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin: 20px 0 10px;
+    margin: 22px 0 12px;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--gray-100);
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .config-section-title:first-child { margin-top: 0; }
+  .config-section-title::before {
+    content: "";
+    width: 3px;
+    height: 14px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
 
-  /* ===== 消息提示 ===== */
-  .toast {
+  /* ===== Toast 消息提示 ===== */
+  .toast-container {
     position: fixed;
-    top: 80px;
-    right: 24px;
-    padding: 12px 18px;
+    top: 76px;
+    right: 16px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: calc(100% - 32px);
+    width: 360px;
+    pointer-events: none;
+  }
+  @media (max-width: 480px) {
+    .toast-container {
+      left: 16px;
+      right: 16px;
+      width: auto;
+      max-width: none;
+    }
+  }
+  .toast {
+    padding: 14px 16px;
     border-radius: var(--radius-sm);
     color: #fff;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     box-shadow: var(--shadow-lg);
-    z-index: 1000;
-    transform: translateX(400px);
-    transition: transform 0.3s ease;
+    pointer-events: auto;
+    transform: translateX(420px);
+    opacity: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
   }
-  .toast.show { transform: translateX(0); }
+  .toast.show {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  .toast-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .toast-body { flex: 1; min-width: 0; }
+  .toast-title {
+    font-weight: 700;
+    margin-bottom: 2px;
+    font-size: 14px;
+  }
+  .toast-msg {
+    font-size: 12px;
+    opacity: 0.9;
+    line-height: 1.4;
+    word-break: break-word;
+  }
   .toast-success { background: var(--success); }
   .toast-error { background: var(--danger); }
   .toast-warning { background: var(--warning); }
+  .toast-info { background: var(--gray-700); }
 
   /* ===== 工具栏 ===== */
   .toolbar {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
     align-items: center;
-    padding: 16px 22px;
+    padding: 14px 16px;
     background: #fff;
     border-radius: var(--radius);
     box-shadow: var(--shadow);
-    margin-bottom: 24px;
+    margin-bottom: 16px;
+    border: 1px solid var(--gray-100);
   }
-  .toolbar-spacer { flex: 1; }
+  @media (min-width: 768px) {
+    .toolbar { padding: 16px 20px; gap: 10px; }
+  }
+  .toolbar-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--gray-600);
+  }
+  .toolbar-spacer { flex: 1 1 100%; }
+  @media (min-width: 600px) {
+    .toolbar-spacer { flex: 1; }
+  }
+  .toolbar-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  @media (min-width: 600px) {
+    .toolbar-actions { width: auto; }
+  }
+  .toolbar-actions .btn { flex: 1; }
+  @media (min-width: 600px) {
+    .toolbar-actions .btn { flex: 0 0 auto; }
+  }
+
+  /* ===== 状态指示器 ===== */
+  .indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--success-light);
+    color: var(--success);
+  }
+  .indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
 
   /* ===== 测试结果 ===== */
   .test-result {
@@ -337,35 +562,37 @@
     font-family: "SF Mono", Monaco, "Cascadia Code", Consolas, monospace;
     font-size: 12px;
     color: var(--gray-700);
-    max-height: 300px;
+    max-height: 320px;
     overflow: auto;
     white-space: pre-wrap;
     word-break: break-all;
     display: none;
+    line-height: 1.5;
   }
   .test-result.visible { display: block; }
-  .test-result.error { color: var(--danger); background: #fef2f2; border-color: #fecaca; }
-
-  /* ===== 状态徽章 ===== */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
+  .test-result.error {
+    color: var(--danger);
+    background: var(--danger-light);
+    border-color: #fecaca;
   }
-  .badge-active {
-    background: rgba(16, 185, 129, 0.1);
+  .test-result.success {
     color: var(--success);
+    background: var(--success-light);
+    border-color: #a7f3d0;
   }
-  .badge-dot {
-    width: 6px;
-    height: 6px;
+
+  /* ===== 变更指示 ===== */
+  .dirty-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--warning);
     border-radius: 50%;
-    background: var(--success);
-    margin-right: 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+    animation: pulse 1.5s infinite;
   }
+  .dirty-dot.hidden { display: none; }
 
   .hidden { display: none !important; }
 
@@ -374,6 +601,30 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--gray-500); }
+
+  /* loading 蒙层 */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255,255,255,0.7);
+    backdrop-filter: blur(2px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+  .loading-overlay.visible { display: flex; }
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--gray-200);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
 </style>
 </head>
 <body>
@@ -383,12 +634,12 @@
   <div class="navbar-inner">
     <div class="navbar-brand">
       <div class="logo">K</div>
-      <span>Kindle Dashboard</span>
+      <span class="brand-text">Kindle Dashboard</span>
     </div>
     <div class="navbar-actions">
       <a href="/dash.png" target="_blank" class="navbar-link">查看图片</a>
-      <a href="/health" target="_blank" class="navbar-link">健康检查</a>
-      <button class="btn btn-ghost" onclick="doLogout()">退出登录</button>
+      <a href="/health" target="_blank" class="navbar-link">健康</a>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">退出</button>
     </div>
   </div>
 </nav>
@@ -397,11 +648,11 @@
 <div id="loginView" class="login-wrap">
   <div class="login-card">
     <h1>欢迎回来</h1>
-    <p class="subtitle">请登录以管理你的 Kindle 仪表盘</p>
+    <p class="subtitle">登录以管理你的 Kindle 仪表盘</p>
     <form onsubmit="event.preventDefault(); doLogin()">
       <div class="form-group">
         <label class="form-label">用户名</label>
-        <input type="text" id="username" class="form-input" placeholder="admin" autocomplete="username">
+        <input type="text" id="username" class="form-input" placeholder="admin" autocomplete="username" autofocus>
       </div>
       <div class="form-group">
         <label class="form-label">密码</label>
@@ -417,19 +668,50 @@
 
   <!-- 工具栏 -->
   <div class="toolbar">
-    <span class="badge badge-active"><span class="badge-dot"></span>当前模板：<span id="currentTplName">-</span></span>
+    <div class="toolbar-info">
+      <span class="indicator"><span class="indicator-dot"></span>运行中</span>
+      <span style="color:var(--gray-400)">·</span>
+      <span>当前：<strong id="toolbarTplName">-</strong></span>
+      <span class="dirty-dot hidden" id="dirtyDot" title="有未保存的修改"></span>
+    </div>
     <div class="toolbar-spacer"></div>
-    <button class="btn btn-secondary" onclick="testTemplate()">测试数据</button>
-    <button class="btn btn-secondary" onclick="generateNow()">立即生成</button>
-    <button class="btn btn-primary" onclick="saveAll()">保存设置</button>
+    <div class="toolbar-actions">
+      <button class="btn btn-secondary" onclick="testTemplate()">测试数据</button>
+      <button class="btn btn-secondary" onclick="generateNow()">立即生成</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveAll()">保存设置</button>
+    </div>
   </div>
 
   <div class="admin-layout">
 
-    <!-- ===== 左侧：模板选择 ===== -->
+    <!-- ===== 左侧：当前状态 + 模板选择 ===== -->
     <div>
+      <!-- 当前模板状态卡片 -->
+      <div class="card status-card" style="margin-bottom:16px;">
+        <div class="card-header">当前生效模板</div>
+        <div class="card-body">
+          <div class="status-tpl-name">
+            <span class="status-tpl-icon" id="statusIcon">📊</span>
+            <span id="statusTplName">-</span>
+          </div>
+          <div class="status-tpl-desc" id="statusTplDesc">-</div>
+          <div class="status-meta">
+            <div class="status-meta-item">
+              <span>模板 ID：</span><strong id="statusTplId">-</strong>
+            </div>
+            <div class="status-meta-item">
+              <span>下次刷新：</span><strong id="statusNextRun">-</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 模板选择 -->
       <div class="card">
-        <div class="card-header">仪表盘模板</div>
+        <div class="card-header">
+          <span>切换模板</span>
+          <span style="font-size:12px;color:var(--gray-400);font-weight:400;">点击选择</span>
+        </div>
         <div class="card-body">
           <div class="tpl-list" id="templateList"></div>
         </div>
@@ -439,7 +721,10 @@
     <!-- ===== 右侧：配置项 ===== -->
     <div>
       <div class="card">
-        <div class="card-header">模板配置</div>
+        <div class="card-header">
+          <span>模板配置</span>
+          <span id="configForTpl" style="font-size:12px;color:var(--gray-400);font-weight:400;"></span>
+        </div>
         <div class="card-body">
 
           <!-- OpenClaw 配置 -->
@@ -447,12 +732,12 @@
             <div class="config-section-title">OpenClaw 网关连接</div>
             <div class="form-group">
               <label class="form-label">Gateway 地址</label>
-              <input type="text" id="ocBaseUrl" class="form-input" placeholder="http://127.0.0.1:18789">
+              <input type="text" id="ocBaseUrl" class="form-input" placeholder="http://127.0.0.1:18789" oninput="markDirty()">
               <div class="form-hint">OpenClaw 网关的 HTTP/HTTPS 地址，会自动转换为 WebSocket 协议</div>
             </div>
             <div class="form-group">
               <label class="form-label">认证方式</label>
-              <select id="ocAuthMode" class="form-select" onchange="toggleAuthHint()">
+              <select id="ocAuthMode" class="form-select" onchange="toggleAuthHint(); markDirty()">
                 <option value="password">Password（密码认证）</option>
                 <option value="token">Token（令牌认证）</option>
                 <option value="none">None（无需认证）</option>
@@ -461,7 +746,7 @@
             </div>
             <div class="form-group">
               <label class="form-label" id="ocCredLabel">密码</label>
-              <input type="password" id="ocCredential" class="form-input" placeholder="输入密码或令牌">
+              <input type="password" id="ocCredential" class="form-input" placeholder="输入密码或令牌" oninput="markDirty()">
               <div class="form-hint" id="ocCredHint">对应 gateway.auth.password 配置</div>
             </div>
           </div>
@@ -471,19 +756,19 @@
             <div class="config-section-title">天气设置</div>
             <div class="form-group">
               <label class="form-label">城市名称</label>
-              <input type="text" id="weatherCity" class="form-input" placeholder="武汉">
+              <input type="text" id="weatherCity" class="form-input" placeholder="武汉" oninput="markDirty()">
               <div class="form-hint">使用 wttr.in 免费天气接口，支持中文城市名</div>
             </div>
 
             <div class="config-section-title">Notion 待办配置</div>
             <div class="form-group">
               <label class="form-label">API Key</label>
-              <input type="password" id="notionKey" class="form-input" placeholder="ntn_xxxxxxxx">
+              <input type="password" id="notionKey" class="form-input" placeholder="ntn_xxxxxxxx" oninput="markDirty()">
               <div class="form-hint">在 https://www.notion.so/my-integrations 创建集成获取</div>
             </div>
             <div class="form-group">
               <label class="form-label">Database ID</label>
-              <input type="text" id="notionDb" class="form-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+              <input type="text" id="notionDb" class="form-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" oninput="markDirty()">
               <div class="form-hint">Notion「每日待办」数据库的 ID</div>
             </div>
           </div>
@@ -493,7 +778,10 @@
 
       <!-- 测试结果 -->
       <div class="card" style="margin-top:16px;">
-        <div class="card-header">数据获取测试结果</div>
+        <div class="card-header">
+          <span>数据获取测试</span>
+          <button class="btn btn-secondary btn-sm" onclick="clearTestResult()">清空</button>
+        </div>
         <div class="card-body">
           <div id="testResult" class="test-result"></div>
         </div>
@@ -503,13 +791,30 @@
   </div>
 </div>
 
-<!-- Toast 提示 -->
-<div id="toast" class="toast"></div>
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Loading 蒙层 -->
+<div id="loadingOverlay" class="loading-overlay">
+  <div class="spinner"></div>
+</div>
 
 <script>
 let templates = [];
 let currentTemplate = '';
 let allSettings = null;
+let isDirty = false;
+
+const TEMPLATE_META = {
+  'openclaw': {
+    icon: '📊',
+    desc: '展示 OpenClaw 网关的 Token 用量、成本和渠道状态'
+  },
+  'calendar-weather-todo': {
+    icon: '📅',
+    desc: '当月日历（含农历/节假日）+ 天气 + Notion 待办'
+  }
+};
 
 // ===== 通用工具 =====
 async function api(path, opts = {}) {
@@ -522,19 +827,67 @@ async function api(path, opts = {}) {
   return data;
 }
 
-function showToast(text, type = 'success') {
-  const el = document.getElementById('toast');
+function showToast(title, msg = '', type = 'success', duration = 3500) {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
   el.className = 'toast toast-' + type;
-  el.textContent = text;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 3000);
+  const icons = { success: '✓', error: '✕', warning: '!', info: 'i' };
+  el.innerHTML = `
+    <div class="toast-icon">${icons[type] || '✓'}</div>
+    <div class="toast-body">
+      <div class="toast-title">${title}</div>
+      ${msg ? `<div class="toast-msg">${msg}</div>` : ''}
+    </div>
+  `;
+  container.appendChild(el);
+  // 触发显示动画
+  requestAnimationFrame(() => el.classList.add('show'));
+  // 自动移除
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, duration);
 }
+
+function showLoading(show = true) {
+  const el = document.getElementById('loadingOverlay');
+  if (show) el.classList.add('visible');
+  else el.classList.remove('visible');
+}
+
+// 标记有未保存的修改
+function markDirty() {
+  isDirty = true;
+  document.getElementById('dirtyDot').classList.remove('hidden');
+  document.getElementById('saveBtn').disabled = false;
+  const btn = document.getElementById('saveBtn');
+  btn.style.background = 'var(--warning)';
+  btn.style.boxShadow = '0 1px 2px rgba(245, 158, 11, 0.4)';
+}
+function clearDirty() {
+  isDirty = false;
+  document.getElementById('dirtyDot').classList.add('hidden');
+  const btn = document.getElementById('saveBtn');
+  btn.style.background = '';
+  btn.style.boxShadow = '';
+}
+
+// 离开页面前提示未保存
+window.addEventListener('beforeunload', (e) => {
+  if (isDirty) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 // ===== 登录 =====
 async function doLogin() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
-  if (!username || !password) { showToast('请输入用户名和密码', 'error'); return; }
+  if (!username || !password) {
+    showToast('登录失败', '请输入用户名和密码', 'error');
+    return;
+  }
   try {
     await api('/api/login', {
       method: 'POST',
@@ -543,13 +896,14 @@ async function doLogin() {
     document.getElementById('loginView').classList.add('hidden');
     document.getElementById('adminView').classList.remove('hidden');
     await loadSettings();
-    showToast('登录成功', 'success');
+    showToast('登录成功', `欢迎回来，${username}`, 'success');
   } catch (e) {
-    showToast(e.message, 'error');
+    showToast('登录失败', e.message, 'error');
   }
 }
 
 async function doLogout() {
+  if (isDirty && !confirm('有未保存的修改，确定退出吗？')) return;
   await api('/api/logout', { method: 'POST' }).catch(() => {});
   location.reload();
 }
@@ -561,28 +915,26 @@ async function loadSettings() {
     templates = data.templates;
     allSettings = data.settings;
     currentTemplate = allSettings.activeTemplate;
+    // 显示下次生成时间
+    if (data.nextRun) {
+      document.getElementById('statusNextRun').textContent = data.nextRun;
+    } else {
+      document.getElementById('statusNextRun').textContent = '—';
+    }
 
     // 渲染模板列表
     const list = document.getElementById('templateList');
-    list.innerHTML = templates.map((t, i) => {
-      const icons = { 'openclaw': '📊', 'calendar-weather-todo': '📅' };
-      const descs = {
-        'openclaw': '展示 OpenClaw 网关的 Token 用量、成本和渠道状态',
-        'calendar-weather-todo': '当月日历（含农历/节假日）+ 天气 + Notion 待办'
-      };
+    list.innerHTML = templates.map(t => {
+      const meta = TEMPLATE_META[t.id] || { icon: '📊', desc: '' };
       return `
         <div class="tpl-item ${t.id === currentTemplate ? 'active' : ''}" onclick="selectTemplate('${t.id}')">
-          <div class="tpl-icon">${icons[t.id] || '📊'}</div>
+          <div class="tpl-icon">${meta.icon}</div>
           <div class="tpl-info">
             <div class="tpl-name">${t.name}</div>
-            <div class="tpl-desc">${descs[t.id] || ''}</div>
+            <div class="tpl-desc">${meta.desc}</div>
           </div>
         </div>`;
     }).join('');
-
-    // 更新当前模板名
-    const cur = templates.find(t => t.id === currentTemplate);
-    document.getElementById('currentTplName').textContent = cur ? cur.name : '-';
 
     // 填充配置项
     const oc = allSettings.openclaw || {};
@@ -597,21 +949,45 @@ async function loadSettings() {
     document.getElementById('notionKey').value = n.apiKey || '';
     document.getElementById('notionDb').value = n.dbId || '';
 
-    // 显示对应配置区
+    // 更新当前模板展示
+    updateCurrentTemplateDisplay();
     showConfigSection(currentTemplate);
     toggleAuthHint();
+    clearDirty();
   } catch (e) {
-    showToast('加载设置失败: ' + e.message, 'error');
+    showToast('加载失败', e.message, 'error');
   }
 }
 
+function updateCurrentTemplateDisplay() {
+  const tpl = templates.find(t => t.id === currentTemplate);
+  const meta = TEMPLATE_META[currentTemplate] || { icon: '📊', desc: '' };
+  const name = tpl ? tpl.name : '-';
+
+  // 状态卡片
+  document.getElementById('statusIcon').textContent = meta.icon;
+  document.getElementById('statusTplName').textContent = name;
+  document.getElementById('statusTplDesc').textContent = meta.desc;
+  document.getElementById('statusTplId').textContent = currentTemplate;
+
+  // 工具栏
+  document.getElementById('toolbarTplName').textContent = name;
+
+  // 配置卡片标题
+  document.getElementById('configForTpl').textContent = `配置 ${name}`;
+}
+
 function selectTemplate(id) {
+  if (isDirty && !confirm('当前有未保存的修改，切换模板会丢失修改，确定吗？')) return;
   currentTemplate = id;
   document.querySelectorAll('.tpl-item').forEach(el => el.classList.remove('active'));
   event.currentTarget.classList.add('active');
   showConfigSection(id);
-  const cur = templates.find(t => t.id === id);
-  document.getElementById('currentTplName').textContent = cur ? cur.name : '-';
+  updateCurrentTemplateDisplay();
+  // 切换模板视为修改
+  if (allSettings && allSettings.activeTemplate !== id) {
+    markDirty();
+  }
 }
 
 function showConfigSection(id) {
@@ -629,52 +1005,78 @@ function toggleAuthHint() {
     label.textContent = 'Token';
     hint.textContent = '对应 gateway.auth.token 配置';
     input.placeholder = '输入令牌';
+    input.disabled = false;
   } else if (mode === 'password') {
     label.textContent = '密码';
     hint.textContent = '对应 gateway.auth.password 配置';
     input.placeholder = '输入密码';
+    input.disabled = false;
   } else {
     label.textContent = '凭证（无需填写）';
     hint.textContent = '认证模式为 none，无需提供凭证';
     input.placeholder = '无需填写';
+    input.disabled = true;
   }
 }
 
 // ===== 保存设置 =====
 async function saveAll() {
+  const btn = document.getElementById('saveBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+  showLoading(true);
+
   try {
-    await api('/api/settings', {
+    const payload = {
+      activeTemplate: currentTemplate,
+      openclaw: {
+        baseUrl: document.getElementById('ocBaseUrl').value.trim(),
+        authMode: document.getElementById('ocAuthMode').value,
+        credential: document.getElementById('ocCredential').value.trim(),
+      },
+      weather: {
+        city: document.getElementById('weatherCity').value.trim(),
+      },
+      notion: {
+        apiKey: document.getElementById('notionKey').value.trim(),
+        dbId: document.getElementById('notionDb').value.trim(),
+      }
+    };
+    const result = await api('/api/settings', {
       method: 'PUT',
-      body: JSON.stringify({
-        activeTemplate: currentTemplate,
-        openclaw: {
-          baseUrl: document.getElementById('ocBaseUrl').value.trim(),
-          authMode: document.getElementById('ocAuthMode').value,
-          credential: document.getElementById('ocCredential').value.trim(),
-        },
-        weather: {
-          city: document.getElementById('weatherCity').value.trim(),
-        },
-        notion: {
-          apiKey: document.getElementById('notionKey').value.trim(),
-          dbId: document.getElementById('notionDb').value.trim(),
-        }
-      })
+      body: JSON.stringify(payload)
     });
-    showToast('设置已保存', 'success');
+    allSettings = result.settings;
+    clearDirty();
+    const tplName = templates.find(t => t.id === currentTemplate)?.name || currentTemplate;
+    showToast(
+      '保存成功',
+      `模板「${tplName}」的配置已生效，下次定时生成将使用新配置。点击「立即生成」可立即应用。`,
+      'success',
+      5000
+    );
   } catch (e) {
-    showToast('保存失败: ' + e.message, 'error');
+    showToast('保存失败', e.message, 'error', 5000);
+    btn.disabled = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    showLoading(false);
   }
 }
 
 // ===== 立即生成 =====
 async function generateNow() {
+  if (isDirty && !confirm('当前有未保存的修改，建议先保存再生成。是否继续生成？')) return;
+  showLoading(true);
   try {
-    showToast('正在生成仪表盘...', 'warning');
     await api('/generate', { method: 'POST' });
-    showToast('生成完成', 'success');
+    showToast('生成完成', '仪表盘图片已更新，刷新 /dash.png 查看效果', 'success', 4000);
   } catch (e) {
-    showToast('生成失败: ' + e.message, 'error');
+    showToast('生成失败', e.message, 'error', 5000);
+  } finally {
+    showLoading(false);
   }
 }
 
@@ -682,15 +1084,22 @@ async function generateNow() {
 async function testTemplate() {
   const el = document.getElementById('testResult');
   el.classList.add('visible');
-  el.classList.remove('error');
-  el.textContent = '测试中...';
+  el.classList.remove('error', 'success');
+  el.textContent = '测试中...（可能需要几秒钟）';
   try {
     const data = await api(`/api/test/${currentTemplate}`);
-    el.textContent = JSON.stringify(data.data, null, 2);
+    el.classList.add('success');
+    el.textContent = '✓ 数据获取成功：\n\n' + JSON.stringify(data.data, null, 2);
   } catch (e) {
     el.classList.add('error');
-    el.textContent = '错误: ' + e.message;
+    el.textContent = '✕ 错误：' + e.message;
   }
+}
+
+function clearTestResult() {
+  const el = document.getElementById('testResult');
+  el.classList.remove('visible', 'error', 'success');
+  el.textContent = '';
 }
 
 // 页面加载时检查登录状态
