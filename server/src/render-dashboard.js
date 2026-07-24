@@ -43,7 +43,11 @@ function renderTopModels(models) {
 function renderChannels(channels) {
   if (!channels || channels.length === 0)
     return '<div class="empty">No channels</div>';
-  return channels
+  // 过滤掉没有任何活动的 channel
+  const active = channels.filter((ch) => ch.lastActivity > 0);
+  if (active.length === 0)
+    return '<div class="empty">No active channels</div>';
+  return active
     .map((ch) => {
       const isOnline = !!ch.online;
       const lastSeen = ch.lastActivity
@@ -54,6 +58,25 @@ function renderChannels(channels) {
         <span class="dot ${isOnline ? "dot-on" : "dot-off"}">${isOnline ? "●" : "○"}</span>
         <span class="channel-name">${ch.name}</span>
         <span class="channel-status ${isOnline ? "status-on" : "status-off"}">${isOnline ? "Online" : "Offline"}${lastSeen}</span>
+      </div>`;
+    })
+    .join("");
+}
+
+function renderProviders(providers) {
+  if (!providers || providers.length === 0)
+    return '<div class="empty">No provider data</div>';
+  return providers
+    .map((p) => {
+      const pct = p.usedPercent || 0;
+      const barWidth = Math.min(100, pct);
+      const balanceText = p.balance ? ` · ${p.balance}` : "";
+      return `
+      <div class="provider-row">
+        <span class="provider-name">${p.name}</span>
+        <div class="provider-bar-track"><div class="provider-bar-fill" style="width:${barWidth}%"></div></div>
+        <span class="provider-pct">${pct}%</span>
+        <span class="provider-balance">${balanceText}</span>
       </div>`;
     })
     .join("");
@@ -161,6 +184,23 @@ function renderHtml(data) {
   .status-on { font-weight: bold; }
   .status-off { color: #999; }
 
+  .provider-row {
+    display: flex;
+    align-items: center;
+    font-size: 24px;
+    margin-bottom: 12px;
+  }
+  .provider-name { width: 120px; font-weight: 500; }
+  .provider-bar-track {
+    flex: 1;
+    height: 22px;
+    border: 2px solid #000;
+    margin: 0 12px;
+  }
+  .provider-bar-fill { height: 100%; background: #000; }
+  .provider-pct { width: 60px; font-size: 22px; text-align: right; font-variant-numeric: tabular-nums; }
+  .provider-balance { width: 140px; font-size: 20px; color: #555; text-align: right; }
+
   .trend-chart {
     display: flex;
     align-items: flex-end;
@@ -215,6 +255,15 @@ function renderHtml(data) {
     <div class="section-title">Top Models</div>
     ${renderTopModels(data.topModels)}
   </div>
+
+  ${
+    data.providers && data.providers.length > 0
+      ? `<div class="section">
+    <div class="section-title">Provider Quota</div>
+    ${renderProviders(data.providers)}
+  </div>`
+      : ""
+  }
 
   <div class="section">
     <div class="section-title">Channels</div>

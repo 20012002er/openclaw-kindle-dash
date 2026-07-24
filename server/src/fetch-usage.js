@@ -170,19 +170,20 @@ function normalizeData(raw) {
   // 如果 totals 已有汇总值，直接用；否则才累加 sessions
   let totalTokens = totals.totalTokens || 0;
   let totalCost = totals.totalCost || 0;
-  let totalMessages = totals.messageCount || totals.totalMessages || 0;
-  const hasTotals = totalTokens > 0 || totalMessages > 0;
+  // messages 始终从 sessions 累加（totals 中通常不含此字段）
+  let totalMessages = 0;
+  const hasTotals = totalTokens > 0;
 
-  if (!hasTotals) {
-    sessions.forEach((s) => {
-      const u = s.usage || {};
+  sessions.forEach((s) => {
+    const u = s.usage || {};
+    totalMessages += u.messageCounts?.total || 0;
+    if (!hasTotals) {
       totalTokens += u.totalTokens || 0;
       totalCost += u.totalCost || 0;
-      totalMessages += u.messageCounts?.total || 0;
-    });
-  }
+    }
+  });
 
-  // 调试：打印第一个 session 的 modelUsage 结构，帮助确认字段路径
+  // 调试：打印第一个 session 的 modelUsage 结构（已确认，可按需关闭）
   if (sessions.length > 0 && sessions[0].usage?.modelUsage) {
     const sample = sessions[0].usage.modelUsage[0];
     console.log("Sample modelUsage entry:", JSON.stringify(sample));
@@ -246,25 +247,32 @@ function normalizeData(raw) {
   });
 
   // 解析 usage.status 中的 provider 配额信息
+  // 实际结构: { updatedAt, providers: [{ provider, displayName, windows:[{label,usedPercent,resetAt}], billing:[{type,amount,unit}], summary }] }
   const providers = [];
   const statusRaw = raw.status;
-  if (statusRaw && typeof statusRaw === "object") {
-    console.log("usage.status raw keys:", Object.keys(statusRaw));
-    console.log("usage.status sample:", JSON.stringify(statusRaw).slice(0, 500));
-    const providerList =
-      statusRaw.providers || statusRaw.entries || statusRaw.items ||
-      statusRaw.usage || statusRaw.accounts || [];
-    if (Array.isArray(providerList)) {
-      providerList.forEach((p) => {
-        providers.push({
-          name: p.provider || p.name || p.id || "unknown",
-          plan: p.plan || p.planName || "",
-          remaining: p.remaining != null ? p.remaining : p.remainingPercent,
-          spent: p.spent || p.cost || p.usage || 0,
-          quota: p.quota || p.limit || p.budget || 0,
+  if (statusRaw && Array.isArray(statusRaw.providers)) {
+    statusRaw.providers.forEach((p) => {
+      // 取第一个 billing 条目作为余额
+      const billing = Array.isArray(p.billing) ? p.billing[0] : null;
+      // 取 usedPercent 最大的 window 作为当前用量百分比
+      let maxUsedPercent = 0;
+      let activeWindowLabel = "";
+      if (Array.isArray(p.windows)) {
+        p.windows.forEach((w) => {
+          if ((w.usedPercent || 0) > maxUsedPercent) {
+            maxUsedPercent = w.usedPercent || 0;
+            activeWindowLabel = w.label || "";
+          }
         });
+      }
+      providers.push({
+        name: p.displayName || p.provider || "unknown",
+        balance: billing ? `${billing.amount} ${billing.unit || ""}`.trim() : "",
+        summary: p.summary || "",
+        usedPercent: maxUsedPercent,
+        windowLabel: activeWindowLabel,
       });
-    }
+    });
   }
 
   // 聚合 quarter-hour token 使用为每小时趋势
