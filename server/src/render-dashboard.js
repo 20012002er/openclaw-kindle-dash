@@ -5,9 +5,11 @@ const SCREEN_WIDTH = parseInt(process.env.SCREEN_WIDTH || "1072", 10);
 const SCREEN_HEIGHT = parseInt(process.env.SCREEN_HEIGHT || "1448", 10);
 
 function formatNumber(n) {
+  if (n == null || isNaN(n)) return "0";
+  if (n >= 1000000000) return (n / 1000000000).toFixed(1) + "B";
   if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
   if (n >= 1000) return (n / 1000).toFixed(1) + "K";
-  return String(n);
+  return String(Math.round(n));
 }
 
 function formatTime(iso) {
@@ -19,16 +21,20 @@ function formatTime(iso) {
 }
 
 function renderTopModels(models) {
-  if (!models || models.length === 0) return '<div class="empty">No data</div>';
-  const max = Math.max(...models.map((m) => m.requests));
-  return models
+  if (!models || models.length === 0)
+    return '<div class="empty">No model data</div>';
+  const displayModels = models.filter((m) => (m.tokens || 0) > 0);
+  if (displayModels.length === 0)
+    return '<div class="empty">No model data</div>';
+  const max = Math.max(...displayModels.map((m) => m.tokens || 0));
+  return displayModels
     .map((m) => {
-      const pct = max > 0 ? Math.round((m.requests / max) * 100) : 0;
+      const pct = max > 0 ? Math.round((m.tokens / max) * 100) : 0;
       return `
       <div class="bar-row">
         <div class="bar-label">${m.name}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-        <div class="bar-value">${m.requests}</div>
+        <div class="bar-value">${formatNumber(m.tokens)}</div>
       </div>`;
     })
     .join("");
@@ -39,12 +45,15 @@ function renderChannels(channels) {
     return '<div class="empty">No channels</div>';
   return channels
     .map((ch) => {
-      const isOnline = ch.status === "online";
+      const isOnline = !!ch.online;
+      const lastSeen = ch.lastActivity
+        ? " · " + formatTime(new Date(ch.lastActivity).toISOString()).slice(5)
+        : "";
       return `
       <div class="channel-row">
         <span class="dot ${isOnline ? "dot-on" : "dot-off"}">${isOnline ? "●" : "○"}</span>
         <span class="channel-name">${ch.name}</span>
-        <span class="channel-status ${isOnline ? "status-on" : "status-off"}">${isOnline ? "Online" : "Offline"}</span>
+        <span class="channel-status ${isOnline ? "status-on" : "status-off"}">${isOnline ? "Online" : "Offline"}${lastSeen}</span>
       </div>`;
     })
     .join("");
@@ -53,6 +62,7 @@ function renderChannels(channels) {
 function renderTrend(trend) {
   if (!trend || trend.length === 0) return "";
   const max = Math.max(...trend);
+  if (max === 0) return "";
   const bars = trend
     .map((v) => {
       const h = max > 0 ? Math.max(2, Math.round((v / max) * 100)) : 2;
@@ -65,6 +75,8 @@ function renderTrend(trend) {
 function renderHtml(data) {
   const s = data.summary || {};
   const totalChannels = (s.onlineChannels || 0) + (s.offlineChannels || 0);
+  const costDisplay =
+    s.totalCost && s.totalCost > 0 ? "$" + s.totalCost.toFixed(2) : "—";
 
   return `<!DOCTYPE html>
 <html>
@@ -75,102 +87,96 @@ function renderHtml(data) {
   body {
     width: ${SCREEN_WIDTH}px;
     height: ${SCREEN_HEIGHT}px;
-    font-family: "Noto Sans", "Helvetica", "Arial", sans-serif;
+    font-family: "Helvetica", "Arial", "Noto Sans CJK SC", sans-serif;
     background: #fff;
     color: #000;
-    padding: 40px;
+    padding: 36px 40px;
     position: relative;
     -webkit-font-smoothing: none;
   }
 
-  /* ===== 标题栏 ===== */
   .header {
     border-bottom: 4px solid #000;
-    padding-bottom: 20px;
-    margin-bottom: 30px;
+    padding-bottom: 18px;
+    margin-bottom: 28px;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
   }
-  .title { font-size: 52px; font-weight: bold; }
-  .timestamp { font-size: 28px; color: #333; }
+  .title { font-size: 50px; font-weight: bold; letter-spacing: -1px; }
+  .timestamp { font-size: 26px; color: #333; }
 
-  /* ===== 指标卡片 ===== */
   .metrics {
     display: flex;
     flex-wrap: wrap;
-    gap: 20px;
-    margin-bottom: 35px;
+    gap: 16px;
+    margin-bottom: 30px;
   }
   .metric-card {
-    flex: 1 1 290px;
+    flex: 1 1 calc(33.33% - 12px);
     border: 3px solid #000;
-    padding: 20px;
+    padding: 16px 14px;
     text-align: center;
+    min-width: 280px;
   }
-  .metric-label { font-size: 24px; color: #333; margin-bottom: 10px; }
-  .metric-value { font-size: 56px; font-weight: bold; }
+  .metric-label { font-size: 22px; color: #444; margin-bottom: 8px; }
+  .metric-value { font-size: 48px; font-weight: bold; line-height: 1.1; }
 
-  /* ===== 区块通用 ===== */
-  .section { margin-bottom: 35px; }
+  .section { margin-bottom: 28px; }
   .section-title {
-    font-size: 32px;
+    font-size: 30px;
     font-weight: bold;
     border-bottom: 2px solid #000;
-    padding-bottom: 10px;
-    margin-bottom: 18px;
+    padding-bottom: 8px;
+    margin-bottom: 14px;
   }
-  .empty { font-size: 26px; color: #666; }
+  .empty { font-size: 24px; color: #888; padding: 10px 0; }
 
-  /* ===== 条形图（Top Models） ===== */
   .bar-row {
     display: flex;
     align-items: center;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
-  .bar-label { width: 220px; font-size: 26px; }
+  .bar-label { width: 200px; font-size: 24px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bar-track {
     flex: 1;
-    height: 30px;
+    height: 26px;
     border: 2px solid #000;
-    margin: 0 15px;
+    margin: 0 12px;
   }
   .bar-fill { height: 100%; background: #000; }
-  .bar-value { width: 90px; font-size: 26px; text-align: right; }
+  .bar-value { width: 80px; font-size: 24px; text-align: right; font-variant-numeric: tabular-nums; }
 
-  /* ===== 渠道列表 ===== */
   .channel-row {
     display: flex;
     align-items: center;
-    font-size: 28px;
-    margin-bottom: 12px;
+    font-size: 26px;
+    margin-bottom: 10px;
   }
-  .dot { font-size: 32px; margin-right: 15px; }
+  .dot { font-size: 28px; margin-right: 12px; line-height: 1; }
   .dot-on { color: #000; }
-  .dot-off { color: #999; }
-  .channel-name { flex: 1; }
+  .dot-off { color: #bbb; }
+  .channel-name { flex: 1; font-weight: 500; }
+  .channel-status { font-size: 22px; }
   .status-on { font-weight: bold; }
   .status-off { color: #999; }
 
-  /* ===== 趋势图 ===== */
   .trend-chart {
     display: flex;
     align-items: flex-end;
-    height: 200px;
-    gap: 4px;
+    height: 160px;
+    gap: 3px;
     border-bottom: 2px solid #000;
-    padding-bottom: 0;
   }
-  .trend-bar { flex: 1; background: #000; }
+  .trend-bar { flex: 1; background: #000; min-width: 4px; }
 
-  /* ===== 页脚 ===== */
   .footer {
     position: absolute;
-    bottom: 25px;
+    bottom: 22px;
     left: 40px;
     right: 40px;
-    font-size: 22px;
-    color: #666;
+    font-size: 20px;
+    color: #888;
     text-align: center;
   }
 </style>
@@ -184,7 +190,7 @@ function renderHtml(data) {
 
   <div class="metrics">
     <div class="metric-card">
-      <div class="metric-label">Total Requests</div>
+      <div class="metric-label">Messages</div>
       <div class="metric-value">${formatNumber(s.totalRequests || 0)}</div>
     </div>
     <div class="metric-card">
@@ -192,15 +198,15 @@ function renderHtml(data) {
       <div class="metric-value">${formatNumber(s.totalTokens || 0)}</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">Total Cost</div>
-      <div class="metric-value">$${(s.totalCost || 0).toFixed(2)}</div>
+      <div class="metric-label">Cost</div>
+      <div class="metric-value">${costDisplay}</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">Active Sessions</div>
       <div class="metric-value">${s.activeSessions || 0}</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">Channels Online</div>
+      <div class="metric-label">Channels</div>
       <div class="metric-value">${s.onlineChannels || 0}/${totalChannels}</div>
     </div>
   </div>
@@ -216,15 +222,15 @@ function renderHtml(data) {
   </div>
 
   ${
-    data.hourlyTrend && data.hourlyTrend.length > 0
+    data.hourlyTrend && data.hourlyTrend.length > 1
       ? `<div class="section">
-    <div class="section-title">24h Trend</div>
+    <div class="section-title">Recent Trend (tokens/hour)</div>
     ${renderTrend(data.hourlyTrend)}
   </div>`
       : ""
   }
 
-  <div class="footer">Powered by OpenClaw · kindle-dash</div>
+  <div class="footer">OpenClaw · kindle-dash</div>
 
 </body>
 </html>`;

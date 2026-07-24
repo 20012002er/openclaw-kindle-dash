@@ -5,18 +5,16 @@ services:
     build: .
     container_name: kindle-dash-server
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    # 使用 host 网络模式：容器直接共享宿主机网络栈，
+    # 这样容器内 127.0.0.1 就是宿主机，可以直接访问宿主机上的 OpenClaw，
+    # 无需 host.docker.internal 或端口映射。
+    # 注意：host 模式下 ports 映射不生效，服务直接监听宿主机端口（由 PORT 环境变量决定，默认 3000）。
+    network_mode: host
     env_file:
       - .env
-    # OpenClaw 运行在宿主机上时，容器内 127.0.0.1 访问不到，
-    # 必须用 host.docker.internal 指向宿主机。
-    # 配合 .env 中 OPENCLAW_BASE_URL=http://host.docker.internal:18789
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       # 挂载到宿主机以便查看生成的 PNG。
-      # 注意：宿主机 ./public 目录必须存在且 appuser(UID 1000) 有写权限。
+      # 宿主机 ./public 目录必须存在且 node 用户(UID 1000) 有写权限。
       # 首次启动前请在宿主机执行：
       #   mkdir -p ./public && chown -R 1000:1000 ./public
       - ./public:/app/public

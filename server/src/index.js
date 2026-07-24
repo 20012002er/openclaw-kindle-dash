@@ -5,6 +5,7 @@ const cron = require("node-cron");
 require("dotenv").config();
 
 const { generateDashboard } = require("./screenshot");
+const { fetchUsage } = require("./fetch-usage");
 
 const PORT = process.env.PORT || 3000;
 const OUTPUT_FILE = path.resolve(process.env.OUTPUT_FILE || "public/dash.png");
@@ -46,6 +47,16 @@ app.post("/generate", async (req, res) => {
   }
 });
 
+// 调试端点：返回标准化后的 usage 数据（不生成图片）
+app.get("/debug", async (req, res) => {
+  try {
+    const data = await fetchUsage();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
 async function main() {
   if (RUN_ONCE) {
     console.log("Generating dashboard once...");
@@ -78,6 +89,7 @@ async function main() {
     console.log(`Kindle dash server listening on http://0.0.0.0:${PORT}`);
     console.log(`  Dashboard PNG: http://localhost:${PORT}/dash.png`);
     console.log(`  Health check:  http://localhost:${PORT}/health`);
+    console.log(`  Debug data:    http://localhost:${PORT}/debug`);
     console.log(`  Cron schedule: ${GENERATE_CRON}`);
   });
 }
