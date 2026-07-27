@@ -24,11 +24,15 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  *   3. 用模板渲染 HTML
  *   4. 用 Puppeteer 截图
  *   5. 转为灰度 PNG（e-ink 屏幕要求）
+ *
+ * @param {string} [templateIdOverride] - 可选；多时段调度模式下指定要使用的模板 ID。
+ *   未传则使用 settings.activeTemplate（向后兼容）。
  */
-async function generateDashboard() {
+async function generateDashboard(templateIdOverride) {
   // 1. 读取设置，选择模板
   const settings = getSettings();
-  const template = getTemplate(settings.activeTemplate);
+  const templateId = templateIdOverride || settings.activeTemplate;
+  const template = getTemplate(templateId);
   console.log(`Using template: ${template.name} (${template.id})`);
 
   // 2. 获取数据

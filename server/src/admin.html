@@ -705,6 +705,9 @@
             <div class="status-meta-item">
               <span>下次刷新：</span><strong id="statusNextRun">-</strong>
             </div>
+            <div class="status-meta-item" id="statusEffectiveRow" style="display:none;">
+              <span>当前生效：</span><strong id="statusEffective">-</strong>
+            </div>
           </div>
         </div>
       </div>
@@ -731,7 +734,9 @@
             <label class="form-label">Cron 表达式</label>
             <input type="text" id="cronExpr" class="form-input" placeholder="*/5 * * * *" oninput="markDirty()">
             <div class="form-hint">
-              仅当前激活模板的 cron 会生效。切换模板后会自动加载该模板的 cron。<br>
+              每个模板独立配置 cron。切换/选择模板后会自动加载该模板的 cron。<br>
+              <strong>单模板模式</strong>：仅 activeTemplate 的 cron 生效。<br>
+              <strong>多时段模式</strong>：各模板在其生效时段内按各自 cron 刷新。<br>
               格式：分 时 日 月 周（5 段）。常见示例：<br>
               · <code>*/5 * * * *</code> 每 5 分钟<br>
               · <code>0 8 * * *</code> 每天 8:00<br>
@@ -740,6 +745,30 @@
           </div>
           <div class="form-group" style="margin-top:8px;">
             <button class="btn btn-secondary btn-sm" onclick="resetCronToDefault()">恢复默认</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 时段调度 配置 -->
+      <div class="card" style="margin-top:16px;">
+        <div class="card-header">
+          <span>时段调度（多模板）</span>
+          <span id="scheduleModeBadge" style="font-size:12px;font-weight:600;padding:2px 10px;border-radius:10px;"></span>
+        </div>
+        <div class="card-body">
+          <div class="form-hint" style="margin-bottom:12px;">
+            配置多个模板按一天中的不同时段生效（如 A 模板 0-12 点、B 模板 12-24 点）。<br>
+            <strong>时段用整数小时表示</strong>：startHour 0-23，endHour 1-24，且 startHour &lt; endHour，<u>不支持跨夜</u>（如 22-2 需写成 22-24 和 0-2 两段）。<br>
+            <strong>各时段不能重叠</strong>，保存时会校验。<br>
+            <strong>未覆盖时段</strong>：保持上一次的画面不刷新。<br>
+            <strong>留空</strong>：回退到单模板模式（按上方"切换模板"激活的模板执行）。
+          </div>
+          <div id="scheduleList" style="display:flex;flex-direction:column;gap:10px;"></div>
+          <div id="scheduleError" class="form-hint" style="color:var(--danger);margin-top:8px;display:none;"></div>
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="addScheduleEntry()">+ 添加时段</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearSchedule()">清空</button>
+            <button class="btn btn-secondary btn-sm" onclick="fillFullDaySchedule()">用 activeTemplate 填充全天</button>
           </div>
         </div>
       </div>
@@ -983,6 +1012,17 @@ async function loadSettings() {
     }
     // 显示当前生效 cron
     document.getElementById('statusCron').textContent = data.activeCron || '—';
+    // 显示当前生效模板（多时段模式下与编辑中的模板可能不同）
+    const effectiveRow = document.getElementById('statusEffectiveRow');
+    const effectiveEl = document.getElementById('statusEffective');
+    const scheduleArr = (allSettings && allSettings.schedule) || [];
+    if (scheduleArr.length > 0 && data.effectiveTemplateId) {
+      const effTpl = templates.find(t => t.id === data.effectiveTemplateId);
+      effectiveEl.textContent = effTpl ? effTpl.name : data.effectiveTemplateId;
+      effectiveRow.style.display = 'flex';
+    } else {
+      effectiveRow.style.display = 'none';
+    }
 
     // 渲染模板列表
     const list = document.getElementById('templateList');
@@ -1020,6 +1060,9 @@ async function loadSettings() {
 
     // 加载当前模板的 cron 表达式
     loadCronForCurrentTemplate();
+
+    // 渲染时段调度列表
+    renderScheduleList();
 
     // 更新当前模板展示
     updateCurrentTemplateDisplay();
@@ -1092,6 +1135,206 @@ function resetCronToDefault() {
   showToast('已恢复默认', '请点击"保存"使更改生效', 'info', 3000);
 }
 
+// ===== 时段调度（多模板）相关 =====
+
+/**
+ * 渲染时段调度列表。
+ * 数据来源：allSettings.schedule（数组）。每次调用都基于该数组重渲。
+ */
+function renderScheduleList() {
+  const list = document.getElementById('scheduleList');
+  const schedule = (allSettings && allSettings.schedule) || [];
+  if (schedule.length === 0) {
+    list.innerHTML = '<div class="form-hint" style="padding:8px 0;">尚未配置时段，当前为单模板模式。</div>';
+  } else {
+    list.innerHTML = schedule.map((entry, idx) => renderScheduleEntryHTML(entry, idx)).join('');
+  }
+  // 绑定事件后再做一次本地校验展示
+  validateScheduleLocal();
+  updateScheduleModeBadge();
+}
+
+/**
+ * 单条调度项的 HTML。包含：模板下拉、startHour、endHour、删除按钮。
+ */
+function renderScheduleEntryHTML(entry, idx) {
+  const tplOptions = templates.map(t =>
+    `<option value="${t.id}" ${t.id === entry.templateId ? 'selected' : ''}>${t.name}</option>`
+  ).join('');
+  const start = Number(entry.startHour);
+  const end = Number(entry.endHour);
+  const startOptions = Array.from({length: 24}, (_, h) =>
+    `<option value="${h}" ${h === start ? 'selected' : ''}>${String(h).padStart(2,'0')}:00</option>`
+  ).join('');
+  // endHour 1-24
+  const endOptions = Array.from({length: 24}, (_, i) => {
+    const h = i + 1;
+    return `<option value="${h}" ${h === end ? 'selected' : ''}>${h === 24 ? '24:00' : String(h).padStart(2,'0') + ':00'}</option>`;
+  }).join('');
+  const cron = (allSettings.cronByTemplate || {})[entry.templateId] || '';
+  return `
+    <div class="schedule-entry" data-idx="${idx}" style="border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);padding:12px;background:var(--gray-50);">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div style="flex:1 1 140px;min-width:140px;">
+          <label class="form-label" style="font-size:11px;">模板</label>
+          <select class="form-select schedule-tpl" onchange="onScheduleEntryChange(${idx})">${tplOptions}</select>
+        </div>
+        <div style="flex:0 0 90px;">
+          <label class="form-label" style="font-size:11px;">开始</label>
+          <select class="form-select schedule-start" onchange="onScheduleEntryChange(${idx})">${startOptions}</select>
+        </div>
+        <div style="flex:0 0 12px;text-align:center;padding-bottom:10px;color:var(--gray-400);">→</div>
+        <div style="flex:0 0 90px;">
+          <label class="form-label" style="font-size:11px;">结束</label>
+          <select class="form-select schedule-end" onchange="onScheduleEntryChange(${idx})">${endOptions}</select>
+        </div>
+        <div style="flex:0 0 auto;padding-bottom:4px;">
+          <button class="btn btn-ghost btn-sm" onclick="removeScheduleEntry(${idx})" title="删除该时段">✕</button>
+        </div>
+      </div>
+      <div class="form-hint" style="margin-top:6px;font-size:11px;">cron: <code>${cron || '(默认)'}</code></div>
+    </div>`;
+}
+
+function updateScheduleModeBadge() {
+  const badge = document.getElementById('scheduleModeBadge');
+  const schedule = (allSettings && allSettings.schedule) || [];
+  if (schedule.length === 0) {
+    badge.textContent = '单模板模式';
+    badge.style.background = 'var(--gray-100)';
+    badge.style.color = 'var(--gray-600)';
+  } else {
+    badge.textContent = `多时段模式 · ${schedule.length} 项`;
+    badge.style.background = 'var(--primary-light)';
+    badge.style.color = 'var(--primary-dark)';
+  }
+}
+
+/**
+ * 添加一个新的空调度项（默认 0-24，模板为当前选中的 currentTemplate）。
+ */
+function addScheduleEntry() {
+  if (!allSettings.schedule) allSettings.schedule = [];
+  allSettings.schedule.push({
+    templateId: currentTemplate,
+    startHour: 0,
+    endHour: 24
+  });
+  renderScheduleList();
+  markDirty();
+}
+
+function removeScheduleEntry(idx) {
+  if (!allSettings.schedule) return;
+  allSettings.schedule.splice(idx, 1);
+  renderScheduleList();
+  markDirty();
+}
+
+function clearSchedule() {
+  if (!allSettings.schedule || allSettings.schedule.length === 0) return;
+  if (!confirm('确定清空所有时段配置吗？将回退到单模板模式。')) return;
+  allSettings.schedule = [];
+  renderScheduleList();
+  markDirty();
+  showToast('已清空', '请点击"保存"使更改生效', 'info', 3000);
+}
+
+/**
+ * 用当前 activeTemplate 填充全天 0-24，方便快速初始化。
+ */
+function fillFullDaySchedule() {
+  allSettings.schedule = [{
+    templateId: currentTemplate,
+    startHour: 0,
+    endHour: 24
+  }];
+  renderScheduleList();
+  markDirty();
+  showToast('已填充全天', '可继续添加其他时段，记得保存', 'info', 3000);
+}
+
+/**
+ * 当某条调度项的下拉变更时，把 DOM 上的值同步回 allSettings.schedule[idx]。
+ */
+function onScheduleEntryChange(idx) {
+  if (!allSettings.schedule || !allSettings.schedule[idx]) return;
+  const container = document.querySelector(`.schedule-entry[data-idx="${idx}"]`);
+  if (!container) return;
+  const tplSel = container.querySelector('.schedule-tpl');
+  const startSel = container.querySelector('.schedule-start');
+  const endSel = container.querySelector('.schedule-end');
+  allSettings.schedule[idx] = {
+    templateId: tplSel.value,
+    startHour: parseInt(startSel.value, 10),
+    endHour: parseInt(endSel.value, 10)
+  };
+  // 模板变更时刷新该条的 cron 显示
+  const cronHint = container.querySelector('.form-hint code');
+  if (cronHint) {
+    const cron = (allSettings.cronByTemplate || {})[tplSel.value] || '';
+    cronHint.textContent = cron || '(默认)';
+  }
+  validateScheduleLocal();
+  markDirty();
+}
+
+/**
+ * 本地实时校验调度配置（不阻断编辑，仅在 UI 显示错误）。
+ * 真正的校验在保存时由后端再次执行。
+ */
+function validateScheduleLocal() {
+  const errEl = document.getElementById('scheduleError');
+  const schedule = (allSettings && allSettings.schedule) || [];
+  if (schedule.length === 0) {
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+    return;
+  }
+  const errors = [];
+  const idSet = new Set(templates.map(t => t.id));
+  const normalized = [];
+  schedule.forEach((entry, i) => {
+    const start = Number(entry.startHour);
+    const end = Number(entry.endHour);
+    if (!entry.templateId || !idSet.has(entry.templateId)) {
+      errors.push(`第 ${i+1} 项：模板无效`);
+      return;
+    }
+    if (!Number.isInteger(start) || !Number.isInteger(end) ||
+        start < 0 || start > 23 || end < 1 || end > 24 || start >= end) {
+      errors.push(`第 ${i+1} 项：时段无效（需 start<end，start 0-23，end 1-24）`);
+      return;
+    }
+    normalized.push({ start, end, index: i });
+  });
+  if (errors.length === 0 && normalized.length > 0) {
+    const sorted = [...normalized].sort((a, b) => a.start - b.start);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i-1].end > sorted[i].start) {
+        errors.push(
+          `时段重叠：第 ${sorted[i-1].index+1} 项 [${sorted[i-1].start}-${sorted[i-1].end}] 与第 ${sorted[i].index+1} 项 [${sorted[i].start}-${sorted[i].end}]`
+        );
+      }
+    }
+  }
+  if (errors.length > 0) {
+    errEl.style.display = 'block';
+    errEl.textContent = '⚠ ' + errors.join('；');
+  } else {
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+  }
+  return errors;
+}
+
+/**
+ * 从 allSettings.schedule 收集当前调度配置（用于保存时构造 payload）。
+ */
+function collectSchedule() {
+  return (allSettings && allSettings.schedule) ? allSettings.schedule.slice() : [];
+}
+
 function showConfigSection(id) {
   document.querySelectorAll('.config-section').forEach(el => el.classList.remove('visible'));
   const target = document.getElementById('config-' + id);
@@ -1130,6 +1373,12 @@ async function saveAll() {
   showLoading(true);
 
   try {
+    // 保存前先做一次本地调度校验，避免发到后端才报错
+    const scheduleErrors = validateScheduleLocal();
+    if (scheduleErrors && scheduleErrors.length > 0) {
+      showToast('保存失败', '调度配置有误，请先修正：' + scheduleErrors[0], 'error', 5000);
+      return;
+    }
     // 保存当前 cronExpr 到 cronByTemplate[currentTemplate]
     const cronByTemplate = {
       ...(allSettings.cronByTemplate || {}),
@@ -1138,6 +1387,7 @@ async function saveAll() {
     const payload = {
       activeTemplate: currentTemplate,
       cronByTemplate,
+      schedule: collectSchedule(),
       openclaw: {
         baseUrl: document.getElementById('ocBaseUrl').value.trim(),
         authMode: document.getElementById('ocAuthMode').value,

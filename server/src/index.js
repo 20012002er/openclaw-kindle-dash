@@ -11,10 +11,12 @@ const {
   getSettings,
   saveSettings,
   getCronForTemplate,
+  validateSchedule,
+  getActiveTemplateByHour,
   DEFAULT_CRON,
 } = require("./settings");
 const { requireAuth, login, logout } = require("./auth");
-const { listTemplates } = require("./templates");
+const { listTemplates, getTemplate } = require("./templates");
 
 const PORT = process.env.PORT || 3000;
 const OUTPUT_FILE = path.resolve(process.env.OUTPUT_FILE || "public/dash.png");
@@ -25,9 +27,13 @@ const SESSION_SECRET =
 const app = express();
 const PUBLIC_DIR = path.dirname(OUTPUT_FILE);
 
-// 当前活跃的定时任务句柄；切换模板或保存设置时会重新调度
-let activeScheduledTask = null;
-let activeScheduledCron = null;
+// 多模板时段调度相关的任务句柄
+// activeScheduledTasks: [{ cron, task, templateId, startHour, endHour }]
+let activeScheduledTasks = [];
+// boundaryTask: 每分钟检查一次，用于在时段切换边界处立即生成新模板的仪表盘
+let boundaryTask = null;
+// 上次成功生成图片所用的模板 ID（用于检测时段切换）
+let lastGeneratedTemplateId = null;
 
 fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 
@@ -64,8 +70,20 @@ app.get("/health", (req, res) => {
 // 手动触发生成
 app.post("/generate", async (req, res) => {
   try {
-    await generateDashboard();
-    res.json({ status: "ok", message: "Dashboard generated" });
+    // 多时段模式下，按当前小时对应的模板生成；否则用 activeTemplate
+    const settings = getSettings();
+    const schedule = Array.isArray(settings.schedule) ? settings.schedule : [];
+    const currentHour = new Date().getHours();
+    const slotTemplateId =
+      getActiveTemplateByHour(schedule, currentHour) ||
+      settings.activeTemplate;
+    await generateDashboard(slotTemplateId);
+    lastGeneratedTemplateId = slotTemplateId;
+    res.json({
+      status: "ok",
+      message: "Dashboard generated",
+      templateId: slotTemplateId,
+    });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
   }
@@ -96,13 +114,29 @@ app.post("/api/logout", logout);
 app.get("/api/settings", requireAuth, (req, res) => {
   const settings = getSettings();
   const templates = listTemplates();
-  // 计算下次定时生成时间（基于当前 activeTemplate 的 cron）
-  const activeCron = getCronForTemplate(settings.activeTemplate);
+  const templateIds = templates.map((t) => t.id);
+  // 校验当前调度配置
+  const scheduleValidation = validateSchedule(
+    settings.schedule || [],
+    templateIds
+  );
+  // 计算当前生效模板
+  const now = new Date();
+  const currentHour = now.getHours();
+  const activeFromSchedule = getActiveTemplateByHour(
+    settings.schedule || [],
+    currentHour
+  );
+  const effectiveTemplateId =
+    settings.schedule && settings.schedule.length > 0
+      ? activeFromSchedule || settings.activeTemplate
+      : settings.activeTemplate;
+  // 计算下次定时生成时间（基于当前生效模板的 cron）
+  const activeCron = getCronForTemplate(effectiveTemplateId);
   let nextRun = null;
   try {
     const parts = activeCron.trim().split(/\s+/);
     const minutePart = parts[0];
-    const now = new Date();
     if (minutePart.startsWith("*/")) {
       const interval = parseInt(minutePart.slice(2)) || 5;
       const next = new Date(now);
@@ -120,7 +154,14 @@ app.get("/api/settings", requireAuth, (req, res) => {
   } catch (e) {
     nextRun = null;
   }
-  res.json({ settings, templates, nextRun, activeCron });
+  res.json({
+    settings,
+    templates,
+    nextRun,
+    activeCron,
+    scheduleValidation,
+    effectiveTemplateId,
+  });
 });
 
 // 保存设置（需认证）
@@ -133,8 +174,27 @@ app.put("/api/settings", requireAuth, (req, res) => {
     finance,
     financeTrend,
     cronByTemplate,
+    schedule,
   } = req.body || {};
   const current = getSettings();
+  const templates = listTemplates();
+  const templateIds = templates.map((t) => t.id);
+  // 若调用方传了 schedule，先校验
+  let scheduleToSave = current.schedule || [];
+  if (schedule !== undefined) {
+    if (!Array.isArray(schedule)) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "schedule 必须是数组" });
+    }
+    const { valid, errors } = validateSchedule(schedule, templateIds);
+    if (!valid) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "调度配置校验失败", details: errors });
+    }
+    scheduleToSave = schedule;
+  }
   const updated = saveSettings({
     activeTemplate: activeTemplate || current.activeTemplate,
     openclaw: openclaw || current.openclaw,
@@ -143,16 +203,16 @@ app.put("/api/settings", requireAuth, (req, res) => {
     finance: finance || current.finance,
     financeTrend: financeTrend || current.financeTrend,
     cronByTemplate: cronByTemplate || current.cronByTemplate,
+    schedule: scheduleToSave,
   });
-  // 保存后重新调度定时任务（activeTemplate 可能切换或 cron 变更）
-  rescheduleActiveTask();
+  // 保存后重新调度定时任务（activeTemplate / cron / schedule 可能变更）
+  rescheduleAllTasks();
   res.json({ ok: true, settings: updated });
 });
 
 // 测试某个模板的数据获取（需认证）
 app.get("/api/test/:templateId", requireAuth, async (req, res) => {
   try {
-    const { getTemplate } = require("./templates");
     const template = getTemplate(req.params.templateId);
     const settings = getSettings();
     const data = await template.fetchData(settings);
@@ -163,73 +223,182 @@ app.get("/api/test/:templateId", requireAuth, async (req, res) => {
 });
 
 /**
- * 重新调度当前 activeTemplate 的定时任务。
- * - 若 cron 变更或模板切换，会先停止旧任务再启动新任务
- * - 仅 activeTemplate 的 cron 会被注册执行
+ * 重新调度所有定时任务。
+ *
+ * 调度策略：
+ *   - 若 settings.schedule 非空：进入多时段模式
+ *       1) 为每个调度项注册一个 cron 任务（cron 取自 cronByTemplate[templateId]）
+ *          任务回调中先校验当前小时是否落在 [startHour, endHour) 内，是则用该模板生成
+ *       2) 额外注册一个每分钟的"边界检查任务"，当当前小时对应的模板与上次生成的不一致时
+ *          立即生成一次，确保时段切换时 Kindle 上的画面能及时更新
+ *   - 若 settings.schedule 为空：回退到单一 activeTemplate 模式（向后兼容）
+ *       仅注册一个 cron 任务，按 activeTemplate 的 cron 调度
  */
-function rescheduleActiveTask() {
-  const settings = getSettings();
-  const newCron = getCronForTemplate(settings.activeTemplate);
-
-  if (activeScheduledCron === newCron && activeScheduledTask) {
-    // cron 未变，无需重新调度
-    return;
-  }
-
+function rescheduleAllTasks() {
   // 停止旧任务
-  if (activeScheduledTask) {
-    try {
-      activeScheduledTask.stop();
-      console.log(`Stopped previous cron task: ${activeScheduledCron}`);
-    } catch (e) {
-      console.error("Failed to stop previous task:", e.message);
-    }
-    activeScheduledTask = null;
-  }
+  stopAllTasks();
 
-  // 校验 cron 表达式
-  if (!cron.validate(newCron)) {
-    console.error(`Invalid cron expression: ${newCron}, skipping schedule`);
-    activeScheduledCron = null;
+  const settings = getSettings();
+  const schedule = Array.isArray(settings.schedule) ? settings.schedule : [];
+
+  if (schedule.length === 0) {
+    // ===== 单一模板模式 =====
+    const cronExpr = getCronForTemplate(settings.activeTemplate);
+    if (!cron.validate(cronExpr)) {
+      console.error(
+        `Invalid cron expression for template "${settings.activeTemplate}": ${cronExpr}, skipping schedule`
+      );
+      return;
+    }
+    const task = cron.schedule(cronExpr, async () => {
+      console.log(
+        `[${require("./lib/local-time").nowLocalISO()}] Generating dashboard (template: ${settings.activeTemplate})...`
+      );
+      try {
+        await generateDashboard();
+        lastGeneratedTemplateId = settings.activeTemplate;
+        console.log("Dashboard generated.");
+      } catch (err) {
+        console.error("Generation failed:", err.message);
+      }
+    });
+    activeScheduledTasks.push({
+      cron: cronExpr,
+      task,
+      templateId: settings.activeTemplate,
+      startHour: 0,
+      endHour: 24,
+    });
+    console.log(
+      `[single-mode] Scheduled cron for template "${settings.activeTemplate}": ${cronExpr}`
+    );
     return;
   }
 
-  // 启动新任务
-  activeScheduledTask = cron.schedule(newCron, async () => {
+  // ===== 多时段调度模式 =====
+  for (let i = 0; i < schedule.length; i++) {
+    const entry = schedule[i] || {};
+    const { templateId, startHour, endHour } = entry;
+    const cronExpr = getCronForTemplate(templateId);
+    if (!cron.validate(cronExpr)) {
+      console.error(
+        `[schedule ${i + 1}] Invalid cron for template "${templateId}": ${cronExpr}, skipped`
+      );
+      continue;
+    }
+    const task = cron.schedule(cronExpr, async () => {
+      const hour = new Date().getHours();
+      if (hour < Number(startHour) || hour >= Number(endHour)) {
+        // 不在当前调度项的时段内，跳过（让对应时段的 cron 任务来生成）
+        return;
+      }
+      console.log(
+        `[${require("./lib/local-time").nowLocalISO()}] Generating dashboard (template: ${templateId}, slot ${startHour}-${endHour})...`
+      );
+      try {
+        await generateDashboard(templateId);
+        lastGeneratedTemplateId = templateId;
+        console.log("Dashboard generated.");
+      } catch (err) {
+        console.error("Generation failed:", err.message);
+      }
+    });
+    activeScheduledTasks.push({
+      cron: cronExpr,
+      task,
+      templateId,
+      startHour: Number(startHour),
+      endHour: Number(endHour),
+    });
     console.log(
-      `[${require("./lib/local-time").nowLocalISO()}] Generating dashboard (template: ${settings.activeTemplate})...`
+      `[schedule ${i + 1}] template="${templateId}" slot=${startHour}-${endHour} cron=${cronExpr}`
     );
-    try {
-      await generateDashboard();
-      console.log("Dashboard generated.");
-    } catch (err) {
-      console.error("Generation failed:", err.message);
+  }
+
+  // 边界检查任务：每分钟检查当前小时对应的模板是否与上次生成的不一致
+  boundaryTask = cron.schedule("* * * * *", async () => {
+    const now = new Date();
+    const hour = now.getHours();
+    const activeId = getActiveTemplateByHour(schedule, hour);
+    if (!activeId) {
+      // 当前小时无调度项覆盖，保持上一次画面，不生成
+      return;
+    }
+    if (lastGeneratedTemplateId !== activeId) {
+      console.log(
+        `[${require("./lib/local-time").nowLocalISO()}] Slot boundary detected: switching to template "${activeId}" (was ${lastGeneratedTemplateId})`
+      );
+      try {
+        await generateDashboard(activeId);
+        lastGeneratedTemplateId = activeId;
+        console.log("Dashboard generated (boundary switch).");
+      } catch (err) {
+        console.error(
+          "Generation failed during boundary switch:",
+          err.message
+        );
+      }
     }
   });
-  activeScheduledCron = newCron;
   console.log(
-    `Scheduled cron for template "${settings.activeTemplate}": ${newCron}`
+    `[schedule-mode] ${activeScheduledTasks.length} cron task(s) + 1 boundary checker registered`
   );
+}
+
+function stopAllTasks() {
+  for (const { task, cron: c, templateId } of activeScheduledTasks) {
+    try {
+      task.stop();
+      console.log(`Stopped cron task: ${c} (template: ${templateId})`);
+    } catch (e) {
+      console.error("Failed to stop task:", e.message);
+    }
+  }
+  activeScheduledTasks = [];
+  if (boundaryTask) {
+    try {
+      boundaryTask.stop();
+      console.log("Stopped boundary checker task");
+    } catch (e) {
+      console.error("Failed to stop boundary task:", e.message);
+    }
+    boundaryTask = null;
+  }
 }
 
 async function main() {
   if (RUN_ONCE) {
     console.log("Generating dashboard once...");
-    await generateDashboard();
+    // 单次模式：若有多时段调度，按当前小时对应的模板生成
+    const settings = getSettings();
+    const schedule = Array.isArray(settings.schedule) ? settings.schedule : [];
+    const currentHour = new Date().getHours();
+    const slotTemplateId =
+      getActiveTemplateByHour(schedule, currentHour) || settings.activeTemplate;
+    await generateDashboard(slotTemplateId);
+    lastGeneratedTemplateId = slotTemplateId;
     console.log("Done.");
     process.exit(0);
   }
 
-  // 启动时先生成一次
-  console.log("Generating initial dashboard...");
+  // 启动时先生成一次（根据当前生效的模板）
+  const settings = getSettings();
+  const schedule = Array.isArray(settings.schedule) ? settings.schedule : [];
+  const currentHour = new Date().getHours();
+  const slotTemplateId =
+    getActiveTemplateByHour(schedule, currentHour) || settings.activeTemplate;
+  console.log(
+    `Generating initial dashboard (template: ${slotTemplateId})...`
+  );
   try {
-    await generateDashboard();
+    await generateDashboard(slotTemplateId);
+    lastGeneratedTemplateId = slotTemplateId;
   } catch (err) {
     console.error("Initial generation failed:", err.message);
   }
 
-  // 启动定时任务（基于 activeTemplate 的 cron 配置）
-  rescheduleActiveTask();
+  // 启动定时任务（基于 schedule / activeTemplate 的 cron 配置）
+  rescheduleAllTasks();
 
   // 启动 HTTP 服务
   app.listen(PORT, "0.0.0.0", () => {
@@ -237,12 +406,18 @@ async function main() {
     console.log(`  Dashboard PNG: http://localhost:${PORT}/dash.png`);
     console.log(`  Admin page:    http://localhost:${PORT}/admin`);
     console.log(`  Health check:  http://localhost:${PORT}/health`);
-    const settings = getSettings();
-    console.log(
-      `  Active template: ${settings.activeTemplate} (cron: ${getCronForTemplate(
-        settings.activeTemplate
-      )})`
-    );
+    const s = getSettings();
+    if (schedule.length > 0) {
+      console.log(
+        `  Mode: multi-schedule (${schedule.length} slot(s), current=${slotTemplateId})`
+      );
+    } else {
+      console.log(
+        `  Mode: single-template (active: ${s.activeTemplate}, cron: ${getCronForTemplate(
+          s.activeTemplate
+        )})`
+      );
+    }
   });
 }
 

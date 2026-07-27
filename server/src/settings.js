@@ -17,6 +17,10 @@ const DEFAULT_SETTINGS = {
     finance: "0 9,15,17 * * 1-5",
     "finance-trend": "0 9,15,17 * * 1-5",
   },
+  // 多模板时段调度：每项 { templateId, startHour, endHour }
+  // startHour: 0-23，endHour: 1-24，要求 startHour < endHour，且各时段不能重叠
+  // 当数组为空时，回退到单一 activeTemplate 模式（向后兼容）
+  schedule: [],
   openclaw: {
     baseUrl: process.env.OPENCLAW_BASE_URL || "http://127.0.0.1:18789",
     authMode: process.env.OPENCLAW_AUTH_MODE || "password", // "password" | "token" | "none"
@@ -61,6 +65,7 @@ function getSettings() {
         ...DEFAULT_SETTINGS.cronByTemplate,
         ...(parsed.cronByTemplate || {}),
       },
+      schedule: Array.isArray(parsed.schedule) ? parsed.schedule : [],
       openclaw: { ...DEFAULT_SETTINGS.openclaw, ...(parsed.openclaw || {}) },
       weather: { ...DEFAULT_SETTINGS.weather, ...(parsed.weather || {}) },
       notion: { ...DEFAULT_SETTINGS.notion, ...(parsed.notion || {}) },
@@ -80,11 +85,13 @@ function saveSettings(newSettings) {
   ensureDataDir();
   // 保留磁盘上已有的 cronByTemplate 值（如果调用方未传该字段）
   let existingCronByTemplate = {};
+  let existingSchedule = [];
   if (fs.existsSync(SETTINGS_FILE)) {
     try {
       const raw = fs.readFileSync(SETTINGS_FILE, "utf-8");
       const parsed = JSON.parse(raw);
       existingCronByTemplate = parsed.cronByTemplate || {};
+      existingSchedule = Array.isArray(parsed.schedule) ? parsed.schedule : [];
     } catch (e) {
       // ignore
     }
@@ -97,6 +104,11 @@ function saveSettings(newSettings) {
       ...existingCronByTemplate,
       ...(newSettings.cronByTemplate || {}),
     },
+    schedule: Array.isArray(newSettings.schedule)
+      ? newSettings.schedule
+      : Array.isArray(existingSchedule)
+      ? existingSchedule
+      : [],
     openclaw: { ...DEFAULT_SETTINGS.openclaw, ...(newSettings.openclaw || {}) },
     weather: { ...DEFAULT_SETTINGS.weather, ...(newSettings.weather || {}) },
     notion: { ...DEFAULT_SETTINGS.notion, ...(newSettings.notion || {}) },
@@ -120,10 +132,87 @@ function getCronForTemplate(templateId) {
   return cronExpr && cronExpr.trim() ? cronExpr.trim() : DEFAULT_CRON;
 }
 
+/**
+ * 校验时段调度配置。
+ * 规则：
+ *   - 每项必须包含 templateId、startHour、endHour
+ *   - startHour 为 0-23 的整数，endHour 为 1-24 的整数，且 startHour < endHour
+ *   - templateId 必须在 availableTemplateIds 列表中
+ *   - 各时段不能重叠（按 startHour 排序后，前一项 endHour 不能大于后一项 startHour）
+ *
+ * @param {Array} schedule - 待校验的调度数组
+ * @param {Array<string>} availableTemplateIds - 可用模板 ID 列表
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+function validateSchedule(schedule, availableTemplateIds) {
+  const errors = [];
+  if (!Array.isArray(schedule)) {
+    return { valid: false, errors: ["schedule 必须是数组"] };
+  }
+  const idSet = new Set(availableTemplateIds);
+  const normalized = [];
+  for (let i = 0; i < schedule.length; i++) {
+    const entry = schedule[i] || {};
+    const start = Number(entry.startHour);
+    const end = Number(entry.endHour);
+    if (!entry.templateId || !idSet.has(entry.templateId)) {
+      errors.push(`第 ${i + 1} 项：templateId 无效（"${entry.templateId}"）`);
+      continue;
+    }
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 0 ||
+      start > 23 ||
+      end < 1 ||
+      end > 24 ||
+      start >= end
+    ) {
+      errors.push(
+        `第 ${i + 1} 项：时段无效（startHour=${entry.startHour}, endHour=${entry.endHour}），要求 startHour 0-23、endHour 1-24 且 startHour < endHour`
+      );
+      continue;
+    }
+    normalized.push({ start, end, index: i });
+  }
+  // 重叠检测：按 start 升序，相邻比较
+  if (normalized.length > 0 && errors.length === 0) {
+    const sorted = [...normalized].sort((a, b) => a.start - b.start);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i - 1].end > sorted[i].start) {
+        errors.push(
+          `时段重叠：第 ${sorted[i - 1].index + 1} 项 [${sorted[i - 1].start}-${sorted[i - 1].end}] 与第 ${sorted[i].index + 1} 项 [${sorted[i].start}-${sorted[i].end}]`
+        );
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * 根据当前小时（0-23）查找调度中生效的模板。
+ * @param {Array} schedule
+ * @param {number} hour - 0-23
+ * @returns {string|null} - 生效的 templateId，或 null（无匹配时段）
+ */
+function getActiveTemplateByHour(schedule, hour) {
+  if (!Array.isArray(schedule) || schedule.length === 0) return null;
+  for (const entry of schedule) {
+    const start = Number(entry.startHour);
+    const end = Number(entry.endHour);
+    if (hour >= start && hour < end) {
+      return entry.templateId;
+    }
+  }
+  return null;
+}
+
 module.exports = {
   getSettings,
   saveSettings,
   getCronForTemplate,
+  validateSchedule,
+  getActiveTemplateByHour,
   SETTINGS_FILE,
   DATA_DIR,
   DEFAULT_CRON,
