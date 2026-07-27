@@ -165,7 +165,7 @@ function parseFinance(md) {
     gold: null,
     oil: null,
     btc: null,
-    timestamp: new Date().toISOString(),
+    timestamp: require("./lib/local-time").nowLocalISO(),
   };
 
   // 提取报告日期（第一行标题中的日期）

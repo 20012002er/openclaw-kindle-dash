@@ -197,7 +197,7 @@ function rescheduleActiveTask() {
   // 启动新任务
   activeScheduledTask = cron.schedule(newCron, async () => {
     console.log(
-      `[${new Date().toISOString()}] Generating dashboard (template: ${settings.activeTemplate})...`
+      `[${require("./lib/local-time").nowLocalISO()}] Generating dashboard (template: ${settings.activeTemplate})...`
     );
     try {
       await generateDashboard();

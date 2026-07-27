@@ -271,7 +271,7 @@ async function fetchData(settings) {
     }),
   ]);
 
-  return { weather, calendar, todos, timestamp: new Date().toISOString() };
+  return { weather, calendar, todos, timestamp: require("../lib/local-time").nowLocalISO() };
 }
 
 function render(data) {

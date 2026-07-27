@@ -73,7 +73,7 @@ function parseFinanceTrend(md) {
     us: [], // 美股市场
     futures: [], // 商品期货
     crypto: [], // 加密货币
-    timestamp: new Date().toISOString(),
+    timestamp: require("./lib/local-time").nowLocalISO(),
   };
 
   result.reportTime = extractReportTime(md);

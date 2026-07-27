@@ -137,7 +137,7 @@ async function fetchFromApi(connConfig) {
 
 function getMockData() {
   return {
-    timestamp: new Date().toISOString(),
+    timestamp: require("./lib/local-time").nowLocalISO(),
     summary: {
       totalRequests: 0,
       totalTokens: 0,
@@ -317,7 +317,7 @@ function normalizeData(raw) {
   }
 
   // 顶部时间戳用当前生成时间（每次都更新）
-  const generatedAt = new Date().toISOString();
+  const generatedAt = require("./lib/local-time").nowLocalISO();
 
   return {
     timestamp: generatedAt,
