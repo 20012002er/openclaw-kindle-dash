@@ -33,8 +33,9 @@ const DEFAULT_SETTINGS = {
     dataFile: "",
   },
   financeTrend: {
-    dataFile: "",
-  },
+      dataFile: "",
+      supplementaryFile: "",
+    },
 };
 
 function ensureDataDir() {
