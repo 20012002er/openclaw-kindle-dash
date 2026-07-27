@@ -18,6 +18,9 @@ const DEFAULT_SETTINGS = {
     apiKey: "",
     dbId: "",
   },
+  finance: {
+    dataFile: "",
+  },
 };
 
 function ensureDataDir() {
@@ -42,6 +45,7 @@ function getSettings() {
       openclaw: { ...DEFAULT_SETTINGS.openclaw, ...(parsed.openclaw || {}) },
       weather: { ...DEFAULT_SETTINGS.weather, ...(parsed.weather || {}) },
       notion: { ...DEFAULT_SETTINGS.notion, ...(parsed.notion || {}) },
+      finance: { ...DEFAULT_SETTINGS.finance, ...(parsed.finance || {}) },
     };
   } catch (e) {
     console.error("Failed to read settings, using defaults:", e.message);
@@ -57,6 +61,7 @@ function saveSettings(newSettings) {
     openclaw: { ...DEFAULT_SETTINGS.openclaw, ...(newSettings.openclaw || {}) },
     weather: { ...DEFAULT_SETTINGS.weather, ...(newSettings.weather || {}) },
     notion: { ...DEFAULT_SETTINGS.notion, ...(newSettings.notion || {}) },
+    finance: { ...DEFAULT_SETTINGS.finance, ...(newSettings.finance || {}) },
   };
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(merged, null, 2));
   return merged;

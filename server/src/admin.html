@@ -773,6 +773,16 @@
             </div>
           </div>
 
+          <!-- 经济形势 配置 -->
+          <div class="config-section" id="config-finance">
+            <div class="config-section-title">经济形势数据源</div>
+            <div class="form-group">
+              <label class="form-label">数据文件路径</label>
+              <input type="text" id="financeDataFile" class="form-input" placeholder="/app/data/fince.md" oninput="markDirty()">
+              <div class="form-hint">经济形势 markdown 文件的绝对路径（容器内路径），默认为 /app/data/fince.md</div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -813,6 +823,10 @@ const TEMPLATE_META = {
   'calendar-weather-todo': {
     icon: '📅',
     desc: '当月日历（含农历/节假日）+ 天气 + Notion 待办'
+  },
+  'finance': {
+    icon: '📈',
+    desc: 'A股/美股指数 + 黄金/原油期货 + 比特币（数据来自 md 文档）'
   }
 };
 
@@ -949,6 +963,9 @@ async function loadSettings() {
     document.getElementById('notionKey').value = n.apiKey || '';
     document.getElementById('notionDb').value = n.dbId || '';
 
+    const fin = allSettings.finance || {};
+    document.getElementById('financeDataFile').value = fin.dataFile || '';
+
     // 更新当前模板展示
     updateCurrentTemplateDisplay();
     showConfigSection(currentTemplate);
@@ -1041,6 +1058,9 @@ async function saveAll() {
       notion: {
         apiKey: document.getElementById('notionKey').value.trim(),
         dbId: document.getElementById('notionDb').value.trim(),
+      },
+      finance: {
+        dataFile: document.getElementById('financeDataFile').value.trim(),
       }
     };
     const result = await api('/api/settings', {

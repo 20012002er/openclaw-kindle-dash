@@ -118,13 +118,14 @@ app.get("/api/settings", requireAuth, (req, res) => {
 
 // 保存设置（需认证）
 app.put("/api/settings", requireAuth, (req, res) => {
-  const { activeTemplate, openclaw, weather, notion } = req.body || {};
+  const { activeTemplate, openclaw, weather, notion, finance } = req.body || {};
   const current = getSettings();
   const updated = saveSettings({
     activeTemplate: activeTemplate || current.activeTemplate,
     openclaw: openclaw || current.openclaw,
     weather: weather || current.weather,
     notion: notion || current.notion,
+    finance: finance || current.finance,
   });
   res.json({ ok: true, settings: updated });
 });
