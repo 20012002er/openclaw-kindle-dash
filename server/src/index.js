@@ -17,6 +17,8 @@ const {
 } = require("./settings");
 const { requireAuth, login, logout } = require("./auth");
 const { listTemplates, getTemplate } = require("./templates");
+const { getNextRun } = require("./lib/cron-next");
+const { nowLocalISO } = require("./lib/local-time");
 
 const PORT = process.env.PORT || 3000;
 const OUTPUT_FILE = path.resolve(process.env.OUTPUT_FILE || "public/dash.png");
@@ -110,6 +112,20 @@ app.get("/admin", (req, res) => {
 app.post("/api/login", login);
 app.post("/api/logout", logout);
 
+/**
+ * 格式化 Date 为本地时间字符串（带日期）。
+ * 例：2026-07-28 08:00
+ */
+function formatLocalDateTime(date) {
+  if (!date) return null;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d} ${hh}:${mm}`;
+}
+
 // 获取当前模板列表 + 设置（需认证）
 app.get("/api/settings", requireAuth, (req, res) => {
   const settings = getSettings();
@@ -123,44 +139,101 @@ app.get("/api/settings", requireAuth, (req, res) => {
   // 计算当前生效模板
   const now = new Date();
   const currentHour = now.getHours();
-  const activeFromSchedule = getActiveTemplateByHour(
-    settings.schedule || [],
-    currentHour
-  );
-  const effectiveTemplateId =
-    settings.schedule && settings.schedule.length > 0
-      ? activeFromSchedule || settings.activeTemplate
-      : settings.activeTemplate;
-  // 计算下次定时生成时间（基于当前生效模板的 cron）
-  const activeCron = getCronForTemplate(effectiveTemplateId);
-  let nextRun = null;
-  try {
-    const parts = activeCron.trim().split(/\s+/);
-    const minutePart = parts[0];
-    if (minutePart.startsWith("*/")) {
-      const interval = parseInt(minutePart.slice(2)) || 5;
-      const next = new Date(now);
-      const min = now.getMinutes();
-      const nextMin = Math.ceil(min / interval) * interval;
-      if (nextMin >= 60) {
-        next.setHours(next.getHours() + 1, nextMin - 60, 0, 0);
+  const schedule = Array.isArray(settings.schedule) ? settings.schedule : [];
+  const activeFromSchedule = getActiveTemplateByHour(schedule, currentHour);
+  const isMultiMode = schedule.length > 0;
+  const effectiveTemplateId = isMultiMode
+    ? activeFromSchedule || settings.activeTemplate
+    : settings.activeTemplate;
+
+  // 计算下次定时生成时间
+  let nextRun = null; // 字符串，供卡片摘要显示
+  let nextRunISO = null; // ISO 字符串，供排序/格式化
+  let activeCron = null; // 当前生效模板的 cron
+  const slotNextRuns = []; // 多时段模式下每个 slot 的下次运行时间
+
+  if (isMultiMode) {
+    // 多时段模式：每个 slot 计算自己的下次"真正生成"时间
+    // - 当前生效的 slot：用 cron 计算下次触发
+    // - 非当前生效的 slot：用下次进入该 slot 的边界时间（startHour:00）
+    let earliestNext = null;
+    for (let i = 0; i < schedule.length; i++) {
+      const entry = schedule[i];
+      const cronExpr = getCronForTemplate(entry.templateId);
+      const startHour = Number(entry.startHour);
+      const endHour = Number(entry.endHour);
+      const isActiveNow =
+        currentHour >= startHour && currentHour < endHour;
+      let next = null;
+      if (isActiveNow) {
+        // 当前生效 slot：cron 下次触发
+        next = getNextRun(cronExpr, now);
       } else {
-        next.setMinutes(nextMin, 0, 0);
+        // 非生效 slot：下次进入该 slot 的边界时间
+        // 今天 startHour:00（若尚未到），否则明天 startHour:00
+        const today = new Date(now);
+        today.setHours(startHour, 0, 0, 0);
+        if (today > now) {
+          next = today;
+        } else {
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          next = tomorrow;
+        }
       }
-      nextRun = next.toLocaleTimeString("zh-CN", { hour12: false });
-    } else {
-      nextRun = activeCron;
+      slotNextRuns.push({
+        templateId: entry.templateId,
+        startHour,
+        endHour,
+        cron: cronExpr,
+        nextRun: formatLocalDateTime(next),
+        nextRunISO: next ? next.toISOString() : null,
+        isActiveNow,
+      });
+      if (next && (!earliestNext || next < earliestNext)) {
+        earliestNext = next;
+      }
+    }
+    if (earliestNext) {
+      nextRun = formatLocalDateTime(earliestNext);
+      nextRunISO = earliestNext.toISOString();
+    }
+    activeCron = getCronForTemplate(effectiveTemplateId);
+  } else {
+    // 单模板模式
+    activeCron = getCronForTemplate(effectiveTemplateId);
+    const next = getNextRun(activeCron, now);
+    if (next) {
+      nextRun = formatLocalDateTime(next);
+      nextRunISO = next.toISOString();
+    }
+  }
+
+  // 上次生成图片的时间（文件 mtime）
+  let lastGeneratedAt = null;
+  try {
+    if (fs.existsSync(OUTPUT_FILE)) {
+      lastGeneratedAt = formatLocalDateTime(
+        new Date(fs.statSync(OUTPUT_FILE).mtime)
+      );
     }
   } catch (e) {
-    nextRun = null;
+    // ignore
   }
+
   res.json({
     settings,
     templates,
     nextRun,
+    nextRunISO,
     activeCron,
     scheduleValidation,
     effectiveTemplateId,
+    isMultiMode,
+    currentHour,
+    slotNextRuns,
+    lastGeneratedAt,
+    serverTime: formatLocalDateTime(now),
   });
 });
 
@@ -252,7 +325,7 @@ function rescheduleAllTasks() {
     }
     const task = cron.schedule(cronExpr, async () => {
       console.log(
-        `[${require("./lib/local-time").nowLocalISO()}] Generating dashboard (template: ${settings.activeTemplate})...`
+        `[${nowLocalISO()}] Generating dashboard (template: ${settings.activeTemplate})...`
       );
       try {
         await generateDashboard();
@@ -293,7 +366,7 @@ function rescheduleAllTasks() {
         return;
       }
       console.log(
-        `[${require("./lib/local-time").nowLocalISO()}] Generating dashboard (template: ${templateId}, slot ${startHour}-${endHour})...`
+        `[${nowLocalISO()}] Generating dashboard (template: ${templateId}, slot ${startHour}-${endHour})...`
       );
       try {
         await generateDashboard(templateId);
@@ -326,7 +399,7 @@ function rescheduleAllTasks() {
     }
     if (lastGeneratedTemplateId !== activeId) {
       console.log(
-        `[${require("./lib/local-time").nowLocalISO()}] Slot boundary detected: switching to template "${activeId}" (was ${lastGeneratedTemplateId})`
+        `[${nowLocalISO()}] Slot boundary detected: switching to template "${activeId}" (was ${lastGeneratedTemplateId})`
       );
       try {
         await generateDashboard(activeId);

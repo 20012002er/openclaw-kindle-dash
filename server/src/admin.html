@@ -271,12 +271,12 @@
   }
   .card-body { padding: 18px 20px; }
 
-  /* ===== 当前模板状态卡片（高亮显示） ===== */
+  /* ===== 当前模板状态卡片（醒目显示） ===== */
   .status-card {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: #fff;
     border: none;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    box-shadow: 0 8px 24px rgba(79, 70, 229, 0.3);
   }
   .status-card .card-header {
     color: rgba(255,255,255,0.85);
@@ -286,41 +286,182 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
-  .status-card .card-body { padding: 20px; }
+  .status-card .card-body { padding: 22px 20px 20px; }
+  .status-running-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .status-running-badge .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+    animation: statusPulse 1.8s infinite;
+  }
+  @keyframes statusPulse {
+    0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+    70% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+  }
   .status-tpl-name {
-    font-size: 24px;
-    font-weight: 700;
+    font-size: 28px;
+    font-weight: 800;
     margin-bottom: 4px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    line-height: 1.2;
   }
   .status-tpl-icon {
-    font-size: 26px;
+    font-size: 32px;
   }
   .status-tpl-desc {
     font-size: 13px;
-    color: rgba(255,255,255,0.8);
+    color: rgba(255,255,255,0.82);
+    margin-bottom: 18px;
+    line-height: 1.5;
+  }
+  /* 醒目的"下次刷新"区块 */
+  .status-next-run {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
     margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .status-next-run-icon {
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .status-next-run-body { flex: 1; min-width: 0; }
+  .status-next-run-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .status-next-run-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  .status-next-run-rel {
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+    margin-top: 2px;
   }
   .status-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
     font-size: 12px;
     color: rgba(255,255,255,0.85);
-    padding-top: 12px;
+    padding-top: 14px;
     border-top: 1px solid rgba(255,255,255,0.15);
+  }
+  @media (max-width: 480px) {
+    .status-meta { grid-template-columns: 1fr; }
   }
   .status-meta-item {
     display: flex;
-    align-items: center;
-    gap: 5px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .status-meta-item .label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.65);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
   }
   .status-meta-item strong {
     color: #fff;
     font-weight: 600;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    word-break: break-all;
+  }
+  /* 多时段 slot 列表 */
+  .status-slots {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+  .status-slots-title {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+  .status-slot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-xs);
+    background: rgba(255,255,255,0.08);
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .status-slot:last-child { margin-bottom: 0; }
+  .status-slot.active {
+    background: rgba(52, 211, 153, 0.22);
+    border: 1px solid rgba(52, 211, 153, 0.4);
+  }
+  .status-slot-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .status-slot-main { flex: 1; min-width: 0; }
+  .status-slot-name {
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 1px;
+  }
+  .status-slot-meta {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+  }
+  .status-slot-next {
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .status-slot-next-time {
+    font-weight: 600;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  .status-slot-active-tag {
+    display: inline-block;
+    background: #34d399;
+    color: #064e3b;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 6px;
+    text-transform: uppercase;
   }
 
   /* ===== 模板选择列表 ===== */
@@ -686,28 +827,61 @@
 
     <!-- ===== 左侧：当前状态 + 模板选择 ===== -->
     <div>
-      <!-- 当前模板状态卡片 -->
+      <!-- 当前模板状态卡片（醒目） -->
       <div class="card status-card" style="margin-bottom:16px;">
-        <div class="card-header">当前生效模板</div>
+        <div class="card-header">
+          <span>当前运行状态</span>
+          <span class="status-running-badge"><span class="dot"></span>运行中</span>
+        </div>
         <div class="card-body">
           <div class="status-tpl-name">
             <span class="status-tpl-icon" id="statusIcon">📊</span>
             <span id="statusTplName">-</span>
           </div>
           <div class="status-tpl-desc" id="statusTplDesc">-</div>
+
+          <!-- 醒目的下次刷新区块 -->
+          <div class="status-next-run">
+            <span class="status-next-run-icon">⏰</span>
+            <div class="status-next-run-body">
+              <div class="status-next-run-label">下次刷新</div>
+              <div class="status-next-run-value" id="statusNextRun">-</div>
+              <div class="status-next-run-rel" id="statusNextRunRel">-</div>
+            </div>
+          </div>
+
+          <!-- 详细元信息 -->
           <div class="status-meta">
             <div class="status-meta-item">
-              <span>模板 ID：</span><strong id="statusTplId">-</strong>
+              <span class="label">运行模式</span>
+              <strong id="statusMode">-</strong>
             </div>
             <div class="status-meta-item">
-              <span>Cron：</span><strong id="statusCron">-</strong>
+              <span class="label">当前生效模板</span>
+              <strong id="statusEffective">-</strong>
             </div>
             <div class="status-meta-item">
-              <span>下次刷新：</span><strong id="statusNextRun">-</strong>
+              <span class="label">Cron 表达式</span>
+              <strong id="statusCron">-</strong>
             </div>
-            <div class="status-meta-item" id="statusEffectiveRow" style="display:none;">
-              <span>当前生效：</span><strong id="statusEffective">-</strong>
+            <div class="status-meta-item">
+              <span class="label">模板 ID</span>
+              <strong id="statusTplId">-</strong>
             </div>
+            <div class="status-meta-item">
+              <span class="label">上次刷新</span>
+              <strong id="statusLastGen">-</strong>
+            </div>
+            <div class="status-meta-item">
+              <span class="label">服务器时间</span>
+              <strong id="statusServerTime">-</strong>
+            </div>
+          </div>
+
+          <!-- 多时段 slot 列表（仅多时段模式显示） -->
+          <div class="status-slots" id="statusSlotsWrap" style="display:none;">
+            <div class="status-slots-title">时段调度明细</div>
+            <div id="statusSlotsList"></div>
           </div>
         </div>
       </div>
@@ -1004,26 +1178,8 @@ async function loadSettings() {
     templates = data.templates;
     allSettings = data.settings;
     currentTemplate = allSettings.activeTemplate;
-    // 显示下次生成时间
-    if (data.nextRun) {
-      document.getElementById('statusNextRun').textContent = data.nextRun;
-    } else {
-      document.getElementById('statusNextRun').textContent = '—';
-    }
-    // 显示当前生效 cron
-    document.getElementById('statusCron').textContent = data.activeCron || '—';
-    // 显示当前生效模板（多时段模式下与编辑中的模板可能不同）
-    const effectiveRow = document.getElementById('statusEffectiveRow');
-    const effectiveEl = document.getElementById('statusEffective');
-    const scheduleArr = (allSettings && allSettings.schedule) || [];
-    if (scheduleArr.length > 0 && data.effectiveTemplateId) {
-      const effTpl = templates.find(t => t.id === data.effectiveTemplateId);
-      effectiveEl.textContent = effTpl ? effTpl.name : data.effectiveTemplateId;
-      effectiveRow.style.display = 'flex';
-    } else {
-      effectiveRow.style.display = 'none';
-    }
-
+    // ===== 渲染醒目的状态卡片 =====
+    renderStatusCard(data);
     // 渲染模板列表
     const list = document.getElementById('templateList');
     list.innerHTML = templates.map(t => {
@@ -1079,17 +1235,115 @@ function updateCurrentTemplateDisplay() {
   const meta = TEMPLATE_META[currentTemplate] || { icon: '📊', desc: '' };
   const name = tpl ? tpl.name : '-';
 
-  // 状态卡片
-  document.getElementById('statusIcon').textContent = meta.icon;
-  document.getElementById('statusTplName').textContent = name;
-  document.getElementById('statusTplDesc').textContent = meta.desc;
-  document.getElementById('statusTplId').textContent = currentTemplate;
-
   // 工具栏
   document.getElementById('toolbarTplName').textContent = name;
 
   // 配置卡片标题
   document.getElementById('configForTpl').textContent = `配置 ${name}`;
+}
+
+/**
+ * 计算相对时间描述（如"约 5 分钟后"、"明天 08:00"、"已过期"）。
+ * @param {string} isoStr - ISO 字符串
+ * @returns {string}
+ */
+function describeRelativeTime(isoStr) {
+  if (!isoStr) return '—';
+  const target = new Date(isoStr);
+  const now = new Date();
+  const diffMs = target - now;
+  if (diffMs < 0) return '已到/已过期';
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return '即将执行';
+  if (diffMin < 60) return `约 ${diffMin} 分钟后`;
+  const diffHr = Math.floor(diffMin / 60);
+  const remMin = diffMin % 60;
+  // 判断是否同一天
+  const sameDay = target.getFullYear() === now.getFullYear() &&
+                  target.getMonth() === now.getMonth() &&
+                  target.getDate() === now.getDate();
+  const hh = String(target.getHours()).padStart(2, '0');
+  const mm = String(target.getMinutes()).padStart(2, '0');
+  if (sameDay) {
+    if (remMin === 0) return `今天 ${hh}:${mm}（约 ${diffHr} 小时后）`;
+    return `今天 ${hh}:${mm}（约 ${diffHr} 小时 ${remMin} 分后）`;
+  }
+  // 明天
+  const tomorrow = new Date(now.getTime() + 24 * 3600 * 1000);
+  const isTomorrow = target.getDate() === tomorrow.getDate() &&
+                     target.getMonth() === tomorrow.getMonth() &&
+                     target.getFullYear() === tomorrow.getFullYear();
+  if (isTomorrow) return `明天 ${hh}:${mm}`;
+  const month = String(target.getMonth() + 1).padStart(2, '0');
+  const day = String(target.getDate()).padStart(2, '0');
+  return `${month}-${day} ${hh}:${mm}`;
+}
+
+/**
+ * 渲染醒目的状态卡片：模板名/图标、下次刷新、运行模式、Cron、上次刷新、服务器时间、slot 列表。
+ * @param {object} data - GET /api/settings 的响应
+ */
+function renderStatusCard(data) {
+  const effectiveId = data.effectiveTemplateId || (allSettings && allSettings.activeTemplate);
+  const effTpl = templates.find(t => t.id === effectiveId);
+  const meta = TEMPLATE_META[effectiveId] || { icon: '📊', desc: '' };
+  const effName = effTpl ? effTpl.name : (effectiveId || '-');
+
+  // 模板名 + 图标 + 描述
+  document.getElementById('statusIcon').textContent = meta.icon;
+  document.getElementById('statusTplName').textContent = effName;
+  document.getElementById('statusTplDesc').textContent = meta.desc || '';
+
+  // 下次刷新
+  const nextRunEl = document.getElementById('statusNextRun');
+  const nextRunRelEl = document.getElementById('statusNextRunRel');
+  if (data.nextRun) {
+    nextRunEl.textContent = data.nextRun;
+    nextRunRelEl.textContent = describeRelativeTime(data.nextRunISO);
+  } else {
+    nextRunEl.textContent = '—';
+    nextRunRelEl.textContent = '当前 cron 无效或无匹配时间';
+  }
+
+  // 元信息
+  document.getElementById('statusMode').textContent = data.isMultiMode
+    ? `多时段模式（${(data.slotNextRuns || []).length} 个时段）`
+    : '单模板模式';
+  document.getElementById('statusEffective').textContent = effName;
+  document.getElementById('statusCron').textContent = data.activeCron || '—';
+  document.getElementById('statusTplId').textContent = effectiveId || '-';
+  document.getElementById('statusLastGen').textContent = data.lastGeneratedAt || '尚无生成记录';
+  document.getElementById('statusServerTime').textContent = data.serverTime || '—';
+
+  // 多时段 slot 列表
+  const slotsWrap = document.getElementById('statusSlotsWrap');
+  const slotsList = document.getElementById('statusSlotsList');
+  if (data.isMultiMode && Array.isArray(data.slotNextRuns) && data.slotNextRuns.length > 0) {
+    slotsWrap.style.display = 'block';
+    slotsList.innerHTML = data.slotNextRuns.map(slot => {
+      const tpl = templates.find(t => t.id === slot.templateId);
+      const m = TEMPLATE_META[slot.templateId] || { icon: '📊' };
+      const name = tpl ? tpl.name : slot.templateId;
+      const startStr = String(slot.startHour).padStart(2, '0') + ':00';
+      const endStr = slot.endHour === 24 ? '24:00' : String(slot.endHour).padStart(2, '0') + ':00';
+      const activeTag = slot.isActiveNow ? '<span class="status-slot-active-tag">当前</span>' : '';
+      const nextTime = slot.nextRun || '—';
+      return `
+        <div class="status-slot ${slot.isActiveNow ? 'active' : ''}">
+          <span class="status-slot-icon">${m.icon}</span>
+          <div class="status-slot-main">
+            <div class="status-slot-name">${name}${activeTag}</div>
+            <div class="status-slot-meta">${startStr} - ${endStr} · cron: ${slot.cron}</div>
+          </div>
+          <div class="status-slot-next">
+            <div class="status-slot-next-time">${nextTime}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } else {
+    slotsWrap.style.display = 'none';
+    slotsList.innerHTML = '';
+  }
 }
 
 function selectTemplate(id) {
