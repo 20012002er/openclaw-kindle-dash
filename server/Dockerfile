@@ -12,6 +12,7 @@ RUN apt-get update \
         fonts-noto-color-emoji \
         fonts-noto-cjk \
         ca-certificates \
+        gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Puppeteer 不再下载自带 Chromium，使用系统安装的 chromium
@@ -32,9 +33,12 @@ COPY . .
 RUN mkdir -p /app/public /app/data /home/node/Downloads \
     && chown -R node:node /app /home/node
 
-# 直接复用 node 镜像自带的 node 用户（UID=1000, GID=1000）
-# 与宿主机挂载目录 ./public 权限对齐：
-#   宿主机需执行：mkdir -p ./public ./data && chown -R 1000:1000 ./public ./data
-USER node
+# 复制 entrypoint 脚本（启动时以 root 修复挂载卷权限，再切换到 node 用户）
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
+# 注意：不设 USER node，容器以 root 启动，entrypoint 内部会用 gosu 降权到 node
+# 这样可以自动修复宿主机挂载卷（./public ./data）的权限问题
+
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "src/index.js"]
