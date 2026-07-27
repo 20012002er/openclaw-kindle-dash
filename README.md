@@ -12,7 +12,7 @@ Turn an old Kindle into a low-power dashboard that displays real-time usage stat
 
 ## What this project is
 
-This project turns a Kindle Paperwhite (or other jailbroken Kindle models) into an always-on, ultra-low-power dashboard. It ships with a default dashboard visualizing usage data from a self-hosted OpenClaw AI gateway, plus a pluggable template system that lets you display anything — a second built-in template shows a monthly calendar (with lunar calendar & Chinese holidays), live weather, and today's Notion todos. A web admin panel lets you switch templates and configure everything from the browser.
+This project turns a Kindle Paperwhite (or other jailbroken Kindle models) into an always-on, ultra-low-power dashboard. It ships with a default dashboard visualizing usage data from a self-hosted OpenClaw AI gateway, plus a pluggable template system that lets you display anything. Three additional built-in templates are included: a monthly calendar (with lunar calendar & Chinese holidays, live weather, and today's Notion todos), a financial snapshot of A-share / US stock indices, gold/oil futures and Bitcoin, and a weekly trend dashboard with sparkline charts for the same markets. A web admin panel lets you switch templates, configure per-template cron schedules, and tweak every data source from the browser.
 
 It consists of two parts:
 
@@ -31,10 +31,13 @@ The server pre-generates the dashboard image on a schedule (default: every 5 min
 │  │  Gateway    │◄────►│  (Node.js)               │   │
 │  │  (WS RPC)   │ WS   │                          │   │
 │  └─────────────┘      │  Templates:              │   │
-│                       │  • openclaw (WS RPC)     │   │
-│  ┌─────────────┐      │  • calendar-weather-todo │   │
-│  │  wttr.in /  │─────►│    (wttr.in + Notion)    │   │
-│  │  Notion API │      │                          │   │
+│  ┌─────────────┐      │  • openclaw (WS RPC)     │   │
+│  │  wttr.in /  │─────►│  • calendar-weather-todo │   │
+│  │  Notion API │      │    (wttr.in + Notion)    │   │
+│  └─────────────┘      │  • finance (md data)     │   │
+│  ┌─────────────┐      │  • finance-trend (md)    │   │
+│  │ finance md  │─────►│                          │   │
+│  │  data file  │      │  • per-template cron     │   │
 │  └─────────────┘      │  • render HTML           │   │
 │                       │  • screenshot to PNG     │   │
 │                       │  • serve /dash.png       │   │
@@ -50,7 +53,7 @@ The server pre-generates the dashboard image on a schedule (default: every 5 min
 │  │  dash.sh           │  │    │  │  /admin           │  │
 │  │  • wake via RTC    │  │    │  │  • login          │  │
 │  │  • fetch dash.png  │  │    │  │  • switch tpl     │  │
-│  │  • display (eips)  │  │    │  │  • edit config    │  │
+│  │  • display (eips)  │  │    │  │  • per-tpl cron   │  │
 │  │  • suspend to RAM  │  │    │  │  • test & generate│  │
 │  └────────────────────┘  │    │  └───────────────────┘  │
 └──────────────────────────┘    └─────────────────────────┘
@@ -61,8 +64,11 @@ The server pre-generates the dashboard image on a schedule (default: every 5 min
 - **Multiple dashboard templates** — Switch between dashboards from the admin panel:
   - **OpenClaw Usage** (default) — Token usage, message counts, active sessions, top models, provider quotas (DeepSeek balance, z.ai usage windows), channel status (WebChat, Telegram, QQ Bot, etc.)
   - **Calendar / Weather / Todo** — Monthly calendar (with lunar calendar & Chinese holidays), live weather from [wttr.in](https://wttr.in), and today's todos fetched from your Notion database
-- **Web admin panel** — Protected by username/password authentication (express-session); switch templates, configure OpenClaw connection, weather city, and Notion credentials, test data fetching, and trigger manual generation — all from the browser
-- **Responsive admin UI** — Left-right two-column layout on desktop that automatically collapses to a single column on mobile/tablet; includes a current-template status card with next refresh time, unsaved-changes indicator, full-screen loading overlay, and detailed Toast notifications
+  - **Finance Snapshot** — A-share indices (Shanghai Composite, Shenzhen Component, STAR 50), US stock indices (Dow Jones, Nasdaq, S&P 500), gold & crude oil futures, and Bitcoin; data is parsed from a Markdown file you supply
+  - **Finance Weekly Trend** — Sparkline charts of one-week price trends for the same A-share / US stock / futures / crypto markets, plus macro indicators and outlook from an optional supplementary Markdown file
+- **Web admin panel** — Protected by username/password authentication (express-session); switch templates, configure OpenClaw connection, weather city, Notion credentials, and finance data file paths, test data fetching, and trigger manual generation — all from the browser
+- **Responsive admin UI** — Left-right two-column layout on desktop that automatically collapses to a single column on mobile/tablet; includes a current-template status card with next refresh time, a per-template cron configuration card, unsaved-changes indicator, full-screen loading overlay, and detailed Toast notifications
+- **Per-template cron schedule** — Each template has its own cron expression stored in `data/settings.json` (e.g. `*/5 * * * *` for OpenClaw, `0 8 * * *` for the calendar template, `0 9,15,17 * * 1-5` for finance templates); only the active template's task is registered, and switching templates or editing the cron reschedules automatically
 - **Template system** — Pluggable architecture; each template implements `fetchData()` + `render()`. Add your own by dropping a file in `server/src/templates/`
 - **Configurable OpenClaw connection** — Gateway URL, auth mode (`password` / `token` / `none`), and credential can be configured from the admin panel (stored in `data/settings.json`); falls back to environment variables
 - **E-ink optimized rendering** — Pure black & white, high contrast, no anti-aliasing, CSS bar charts, tuned for Kindle Paperwhite 7th Gen (1072×1448 portrait)
@@ -70,7 +76,7 @@ The server pre-generates the dashboard image on a schedule (default: every 5 min
 - **Ultra-low power** — Kindle suspends to RAM between updates; a single charge lasts weeks
 - **RTC wake alarm** — Auto-detects the correct RTC path on different Kindle models for reliable scheduled wake-ups
 - **Docker deployment** — One-command deployment via `docker compose up -d --build`; uses `network_mode: host` so the container can reach OpenClaw on localhost
-- **Configurable schedule** — Server generates new images every 5 minutes (cron); Kindle refreshes every 10 minutes (configurable)
+- **Configurable schedule** — Each template runs on its own cron schedule (the OpenClaw template defaults to every 5 minutes); the Kindle refresh interval is configured separately (default every 10 minutes)
 - **Grayscale conversion** — PNG is converted to pure grayscale (no alpha channel) for crisp e-ink rendering
 - **Debug endpoints** — `GET /debug` returns normalized JSON data; `GET /api/test/:templateId` tests data fetching for any template
 
@@ -105,7 +111,7 @@ Key settings in `.env`:
 | `FETCH_MODE` | `api` | `api` = connect to OpenClaw via WS, `mock` = use fake data for testing |
 | `PORT` | `3000` | HTTP server port |
 | `OUTPUT_FILE` | `public/dash.png` | Generated PNG output path |
-| `GENERATE_CRON` | `*/5 * * * *` | Cron schedule for image generation |
+| `GENERATE_CRON` | `*/5 * * * *` | Default cron fallback used when a template has no per-template cron configured in `data/settings.json` (see `cronByTemplate`) |
 | `SCREEN_WIDTH` | `1072` | Kindle screen width (portrait) |
 | `SCREEN_HEIGHT` | `1448` | Kindle screen height (portrait) |
 | `PAGE_RENDER_DELAY` | `1000` | Extra milliseconds to wait after page load before screenshotting (ensures fonts/layout are fully rendered) |
@@ -147,15 +153,17 @@ Open `http://YOUR-SERVER-IP:3000/admin` in your browser and log in with the `ADM
 
 The admin panel features a responsive left-right two-column layout:
 
-- **Left column** — Current template status card (showing template name, description, ID, and next scheduled refresh time) + template selector
+- **Left column** — Current template status card (showing template name, description, ID, next scheduled refresh time, and active cron expression) + template selector + per-template cron configuration card
 - **Right column** — Configuration form for the active template + data fetching test result panel
 
 From the admin panel you can:
 
-- **Switch dashboard template** — Select between OpenClaw Usage and Calendar / Weather / Todo
+- **Switch dashboard template** — Select between OpenClaw Usage, Calendar / Weather / Todo, Finance Snapshot, and Finance Weekly Trend
+- **Configure per-template cron** — Edit the cron expression for the currently active template; switching templates loads that template's saved cron automatically, and a "Reset to default" button restores the built-in default
 - **Configure OpenClaw connection** — Set gateway URL, auth mode (`password` / `token` / `none`), and credential
 - **Configure weather city** — For the Calendar/Weather/Todo template (default: 武汉)
 - **Configure Notion integration** — Enter your Notion API key and the Database ID of your daily todo database
+- **Configure finance data sources** — For the Finance Snapshot template, set the path to the Markdown data file (e.g. `/app/data/fince.md`); for the Finance Weekly Trend template, set both the JSON Markdown data file (e.g. `/app/data/fince-data.md`) and an optional supplementary Markdown file (e.g. `/app/data/fince.md`) for macro indicators and outlook
 - **Test data fetching** — Verify that the selected template can fetch data successfully before applying; results are displayed in a code block below the form
 - **Trigger manual generation** — Generate the dashboard image immediately without waiting for the next cron run
 
@@ -191,6 +199,23 @@ To set up:
 3. Share your database with the integration
 4. Copy the database ID from the database URL (the 32-character string)
 5. Enter the API key and database ID in the admin panel
+
+### 6. Finance data file setup (for Finance templates)
+
+The two finance templates do not call any external API — they parse data from Markdown files you provide. This lets you feed in market data produced by any pipeline you already run.
+
+**Finance Snapshot** (`finance`) — reads a Markdown file structured like `docs/fince.md`:
+- Section `## 2. A股市场` and `## 3. 美股市场` — tables of indices with `名称 / 最新点位 / 日涨跌幅 / 周涨跌幅`
+- Section `## 4. 商品市场` — OHLC tables for gold (`fuGC`) and crude oil (`fuCL`) futures
+- Section `## 5. 加密货币` — BTC price and 24h change
+
+**Finance Weekly Trend** (`finance-trend`) — reads a Markdown file whose final `## 📦 原始数据 (JSON)` code block contains a JSON object with four arrays: `🇨🇳 国内市场`, `🇺🇸 美股市场`, `📈 商品期货`, `₿ 加密货币`. Each item carries `name`, `unit`, `latest_price`, `daily_change_pct`, and a `week_data` array of `{date, close, change_pct}`. An optional supplementary Markdown file (the Finance Snapshot file) supplies macro indicators (CPI / PPI / PMI / M2 etc.) and a market outlook section that is rendered alongside the charts.
+
+To set up:
+1. Generate or place your Markdown data file(s) inside the container, e.g. `/app/data/fince.md` and `/app/data/fince-data.md` (mount a host directory to `/app/data` if you run via Docker)
+2. Open the admin panel, activate the desired finance template, and set the data file path(s) in the "Template configuration" form
+3. Click "Test data" to verify parsing; if successful, save and the next cron tick will render the dashboard
+4. Reference data file format: see `docs/fince.md` (snapshot) and `docs/fince-data.md` (weekly trend JSON) for examples
 
 ## Kindle client setup
 
@@ -255,6 +280,8 @@ Built-in templates:
 |---|---|---|
 | `openclaw` | OpenClaw Usage | Token usage, messages, top models, provider quotas, channel status |
 | `calendar-weather-todo` | Calendar / Weather / Todo | Monthly calendar (with lunar calendar & Chinese holidays), weather from wttr.in, today's todos from Notion |
+| `finance` | Finance Snapshot | A-share / US stock indices, gold & crude oil futures, Bitcoin — parsed from a Markdown data file |
+| `finance-trend` | Finance Weekly Trend | One-week sparkline trends for A-share / US stock / futures / crypto markets, plus macro indicators and outlook |
 
 #### Adding a custom template
 
@@ -304,13 +331,15 @@ const TEMPLATES = {
 4. Restart the server — the new template will appear in the admin panel's template selector.
 
 ### Server side
-1. On startup and every 5 minutes (cron), the server loads the active template from settings
-2. The OpenClaw template connects to OpenClaw's gateway WebSocket, authenticates with `password` or `token`, and calls `sessions.usage` and `usage.status` RPC methods in parallel
-3. The Calendar/Weather/Todo template fetches weather from wttr.in, generates calendar data (including lunar calendar and Chinese holidays via `lunar-javascript`), and queries the Notion database for today's todos
-4. The template renders an e-ink friendly HTML
-5. Puppeteer screenshots the HTML into a PNG
-6. The PNG is converted to pure grayscale (no alpha)
-7. The PNG is served at `GET /dash.png`
+1. On startup the server generates the dashboard once, then registers a single cron task for the active template using its `cronByTemplate` entry (falling back to `GENERATE_CRON`)
+2. On each cron tick the server loads the active template from `data/settings.json` and calls `fetchData()` then `render()`
+3. The OpenClaw template connects to OpenClaw's gateway WebSocket, authenticates with `password` or `token`, and calls `sessions.usage` and `usage.status` RPC methods in parallel
+4. The Calendar/Weather/Todo template fetches weather from wttr.in, generates calendar data (including lunar calendar and Chinese holidays via `lunar-javascript`), and queries the Notion database for today's todos
+5. The Finance Snapshot and Finance Weekly Trend templates parse their respective Markdown data files (no network calls)
+6. The template renders an e-ink friendly HTML
+7. Puppeteer screenshots the HTML into a PNG
+8. The PNG is converted to pure grayscale (no alpha)
+9. The PNG is served at `GET /dash.png`. When the active template or its cron is changed via the admin panel, the old task is stopped and the new one is started automatically
 
 ### Kindle side
 1. On start, stops the Kindle framework and enters a loop
@@ -372,17 +401,21 @@ kindle-dash/
 │   │   ├── templates/             # Dashboard templates (pluggable)
 │   │   │   ├── index.js           # Template registry (getTemplate, listTemplates)
 │   │   │   ├── openclaw.js        # OpenClaw usage template
-│   │   │   └── calendar-weather-todo.js  # Calendar/Weather/Todo template
+│   │   │   ├── calendar-weather-todo.js  # Calendar/Weather/Todo template
+│   │   │   ├── finance.js         # Finance snapshot template (md-driven)
+│   │   │   └── finance-trend.js   # Finance weekly trend template (md-driven)
 │   │   ├── admin.html             # Admin panel UI (responsive)
 │   │   ├── auth.js                # Admin authentication (express-session)
 │   │   ├── fetch-usage.js         # OpenClaw WebSocket RPC client
 │   │   ├── fetch-weather.js       # wttr.in weather fetcher
 │   │   ├── fetch-todos.js         # Notion todo fetcher
+│   │   ├── parse-finance.js       # Parser for finance snapshot md (indices/futures/crypto)
+│   │   ├── parse-finance-trend.js # Parser for finance trend md (JSON block + supplementary)
 │   │   ├── render-calendar.js     # Calendar data (lunar + holidays via lunar-javascript)
 │   │   ├── render-dashboard.js    # OpenClaw dashboard HTML renderer
 │   │   ├── screenshot.js          # Puppeteer screenshot + grayscale conversion
-│   │   ├── settings.js            # Settings persistence (data/settings.json)
-│   │   └── index.js               # Express server + cron scheduler
+│   │   ├── settings.js            # Settings persistence + getCronForTemplate (data/settings.json)
+│   │   └── index.js               # Express server + per-template cron scheduler
 │   ├── .env.example               # Environment variable template
 │   ├── Dockerfile                 # Container image (node:20-bookworm-slim + chromium)
 │   └── docker-compose.yml         # Docker Compose config (network_mode: host)
@@ -397,7 +430,7 @@ kindle-dash/
 │   ├── stop.sh                    # Stop script
 │   └── wait-for-wifi.sh           # Wi-Fi connectivity check
 ├── KUAL/                          # KUAL extension for menu-based launch
-├── docs/                          # Development docs
+├── docs/                          # Development docs (incl. fince.md & fince-data.md finance sample data)
 ├── example/                       # Demo screenshots
 └── README.md
 ```

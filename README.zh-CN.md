@@ -12,7 +12,7 @@
 
 ## 项目简介
 
-本项目将 Kindle Paperwhite（或其他越狱过的 Kindle 型号）变成一个常亮、超低功耗的仪表盘。默认仪表盘可视化自托管 OpenClaw 网关的用量数据，同时提供可插拔的模板系统，你可以展示任何内容 —— 第二个内置模板展示当月日历（含农历和节假日）、实时天气和今天的 Notion 待办。通过 Web 管理面板可以在浏览器中切换模板并配置所有参数。
+本项目将 Kindle Paperwhite（或其他越狱过的 Kindle 型号）变成一个常亮、超低功耗的仪表盘。默认仪表盘可视化自托管 OpenClaw 网关的用量数据，同时提供可插拔的模板系统，你可以展示任何内容。除默认模板外还内置了三个模板：当月日历（含农历和节假日、实时天气、今天的 Notion 待办），A股 / 美股指数 + 黄金/原油期货 + 比特币的财经快照，以及同样市场的一周走势看板（含 sparkline 走势图）。通过 Web 管理面板可以在浏览器中切换模板、为每个模板单独配置 cron 计划，并调整所有数据源。
 
 项目由两部分组成：
 
@@ -31,10 +31,13 @@
 │  │  Gateway    │◄────►│  (Node.js)               │   │
 │  │  (WS RPC)   │ WS   │                          │   │
 │  └─────────────┘      │  模板系统：              │   │
-│                       │  • openclaw (WS RPC)     │   │
-│  ┌─────────────┐      │  • calendar-weather-todo │   │
-│  │  wttr.in /  │─────►│    (wttr.in + Notion)    │   │
-│  │  Notion API │      │                          │   │
+│  ┌─────────────┐      │  • openclaw (WS RPC)     │   │
+│  │  wttr.in /  │─────►│  • calendar-weather-todo │   │
+│  │  Notion API │      │    (wttr.in + Notion)    │   │
+│  └─────────────┘      │  • finance (md 数据)     │   │
+│  ┌─────────────┐      │  • finance-trend (md)    │   │
+│  │ 财经 md 数据│─────►│                          │   │
+│  │  文件       │      │  • 每模板独立 cron       │   │
 │  └─────────────┘      │  • 渲染 HTML             │   │
 │                       │  • 截图生成 PNG          │   │
 │                       │  • 提供 /dash.png        │   │
@@ -50,7 +53,7 @@
 │  │  dash.sh           │  │    │  │  /admin           │  │
 │  │  • 通过 RTC 唤醒   │  │    │  │  • 登录           │  │
 │  │  • 拉取 dash.png   │  │    │  │  • 切换模板       │  │
-│  │  • eips 显示       │  │    │  │  • 编辑配置       │  │
+│  │  • eips 显示       │  │    │  │  • 每模板 cron    │  │
 │  │  • 挂起到内存      │  │    │  │  • 测试 & 生成    │  │
 │  └────────────────────┘  │    │  └───────────────────┘  │
 └──────────────────────────┘    └─────────────────────────┘
@@ -61,8 +64,11 @@
 - **多仪表盘模板** — 在管理面板中切换不同仪表盘：
   - **OpenClaw 用量**（默认）— Token 用量、消息数、活跃会话、热门模型、Provider 配额（DeepSeek 余额、z.ai 用量窗口）、渠道状态（WebChat、Telegram、QQ Bot 等）
   - **日历 / 天气 / 待办** — 当月日历（含农历和中国节假日）、来自 [wttr.in](https://wttr.in) 的实时天气、从 Notion 数据库拉取的今日待办
-- **Web 管理面板** — 用户名密码验证保护（基于 express-session）；可在浏览器中切换模板、配置 OpenClaw 连接、天气城市和 Notion 凭证、测试数据获取、手动触发生成
-- **响应式管理界面** — 桌面端左右两栏布局，移动端/平板自动切换为单列；包含当前模板状态卡片（显示下次刷新时间）、未保存修改提示、全屏加载遮罩和详细的 Toast 通知
+  - **财经快照** — A股指数（上证综指、深证成指、科创50）、美股指数（道琼斯、纳斯达克、标普500）、黄金和原油期货、比特币；数据由你提供的 Markdown 文件解析
+  - **财经一周走势** — 同样涵盖 A股 / 美股 / 期货 / 加密货币市场的一周 sparkline 走势图，外加来自可选补充 Markdown 文件的宏观经济指标和走势展望
+- **Web 管理面板** — 用户名密码验证保护（基于 express-session）；可在浏览器中切换模板、配置 OpenClaw 连接、天气城市、Notion 凭证和财经数据文件路径、测试数据获取、手动触发生成
+- **响应式管理界面** — 桌面端左右两栏布局，移动端/平板自动切换为单列；包含当前模板状态卡片（显示下次刷新时间和当前 cron 表达式）、每模板 cron 配置卡片、未保存修改提示、全屏加载遮罩和详细的 Toast 通知
+- **每模板独立 cron 计划** — 每个模板在 `data/settings.json` 中存储独立的 cron 表达式（如 OpenClaw `*/5 * * * *`、日历模板 `0 8 * * *`、财经模板 `0 9,15,17 * * 1-5`）；系统只注册活跃模板的定时任务，切换模板或修改 cron 时会自动重新调度
 - **模板系统** — 可插拔架构；每个模板实现 `fetchData()` + `render()` 两个方法。在 `server/src/templates/` 下添加文件即可扩展
 - **可配置的 OpenClaw 连接** — 网关地址、认证方式（`password` / `token` / `none`）、凭证都可在管理面板配置（存储于 `data/settings.json`）；环境变量作为默认值/回退
 - **E-ink 优化渲染** — 纯黑白、高对比度、无抗锯齿、CSS 条形图，针对 Kindle Paperwhite 第 7 代（1072×1448 竖屏）调优
@@ -70,7 +76,7 @@
 - **超低功耗** — Kindle 在两次刷新之间挂起到内存；一次充电可用数周
 - **RTC 唤醒** — 自动检测不同 Kindle 型号的 RTC 路径，确保按计划可靠唤醒
 - **Docker 部署** — 通过 `docker compose up -d --build` 一键部署；使用 `network_mode: host` 网络模式，容器可直接通过 localhost 访问 OpenClaw
-- **可配置计划** — 后端每 5 分钟生成新图片（cron）；Kindle 每 10 分钟刷新一次（可配置）
+- **可配置计划** — 每个模板运行在独立的 cron 计划上（OpenClaw 模板默认每 5 分钟）；Kindle 的刷新间隔单独配置（默认每 10 分钟）
 - **灰度转换** — PNG 转为纯灰度（无 alpha 通道），确保 e-ink 显示清晰
 - **调试端点** — `GET /debug` 返回标准化后的 JSON 数据；`GET /api/test/:templateId` 测试任意模板的数据获取
 
@@ -105,7 +111,7 @@ vi .env
 | `FETCH_MODE` | `api` | `api` = 通过 WS 连接 OpenClaw；`mock` = 使用模拟数据（用于测试） |
 | `PORT` | `3000` | HTTP 服务端口 |
 | `OUTPUT_FILE` | `public/dash.png` | 生成的 PNG 输出路径 |
-| `GENERATE_CRON` | `*/5 * * * *` | 图片生成的 cron 计划 |
+| `GENERATE_CRON` | `*/5 * * * *` | 默认 cron 回退值：当模板在 `data/settings.json` 中没有配置独立 cron 时使用（见 `cronByTemplate`） |
 | `SCREEN_WIDTH` | `1072` | Kindle 屏幕宽度（竖屏） |
 | `SCREEN_HEIGHT` | `1448` | Kindle 屏幕高度（竖屏） |
 | `PAGE_RENDER_DELAY` | `1000` | 页面加载后额外等待的毫秒数，确保字体/布局渲染完成后再截图 |
@@ -147,15 +153,17 @@ curl http://localhost:3000/dash.png -o test.png
 
 管理面板采用响应式左右两栏布局：
 
-- **左栏** — 当前模板状态卡片（显示模板名称、描述、ID 和下次定时刷新时间）+ 模板选择器
+- **左栏** — 当前模板状态卡片（显示模板名称、描述、ID、下次定时刷新时间和当前 cron 表达式）+ 模板选择器 + 每模板 cron 配置卡片
 - **右栏** — 当前模板的配置表单 + 数据获取测试结果面板
 
 在管理面板中可以：
 
-- **切换仪表盘模板** — 在 OpenClaw 用量 和 日历/天气/待办 之间切换
+- **切换仪表盘模板** — 在 OpenClaw 用量、日历/天气/待办、财经快照、财经一周走势之间切换
+- **配置每模板 cron** — 编辑当前激活模板的 cron 表达式；切换模板时会自动加载该模板已保存的 cron；「恢复默认」按钮可还原内置默认值
 - **配置 OpenClaw 连接** — 设置网关地址、认证方式（`password` / `token` / `none`）和凭证
 - **配置天气城市** — 为日历/天气/待办模板设置城市（默认：武汉）
 - **配置 Notion 集成** — 填入 Notion API key 和每日待办数据库的 Database ID
+- **配置财经数据源** — 财经快照模板设置 Markdown 数据文件路径（如 `/app/data/fince.md`）；财经一周走势模板同时设置 JSON Markdown 数据文件（如 `/app/data/fince-data.md`）和可选的补充 Markdown 文件（如 `/app/data/fince.md`，用于宏观经济指标和走势展望）
 - **测试数据获取** — 在应用配置前验证所选模板能成功获取数据；结果展示在表单下方的代码块中
 - **手动触发生成** — 立即生成仪表盘图片，无需等待下次 cron
 
@@ -191,6 +199,23 @@ curl http://localhost:3000/dash.png -o test.png
 3. 将你的数据库分享给该集成
 4. 从数据库 URL 中复制数据库 ID（32 位字符串）
 5. 在管理面板中填入 API key 和数据库 ID
+
+### 6. 财经数据文件配置（用于财经模板）
+
+两个财经模板都不会调用任何外部 API —— 它们从你提供的 Markdown 文件中解析数据。这让你可以直接复用任何已有的市场数据流水线。
+
+**财经快照** (`finance`) — 读取结构如 `docs/fince.md` 的 Markdown 文件：
+- `## 2. A股市场` 与 `## 3. 美股市场` 章节 —— 指数表格，列为 `名称 / 最新点位 / 日涨跌幅 / 周涨跌幅`
+- `## 4. 商品市场` 章节 —— 黄金 (`fuGC`) 和原油 (`fuCL`) 期货的 OHLC 表格
+- `## 5. 加密货币` 章节 —— BTC 价格和 24h 涨跌
+
+**财经一周走势** (`finance-trend`) — 读取一个 Markdown 文件，其末尾的 `## 📦 原始数据 (JSON)` 代码块包含一个 JSON 对象，由四个数组组成：`🇨🇳 国内市场`、`🇺🇸 美股市场`、`📈 商品期货`、`₿ 加密货币`。每个条目包含 `name`、`unit`、`latest_price`、`daily_change_pct` 以及 `week_data` 数组（`{date, close, change_pct}`）。可选的补充 Markdown 文件（即财经快照文件）用于提供宏观经济指标（CPI / PPI / PMI / M2 等）和市场展望章节，会与走势图一同渲染。
+
+配置步骤：
+1. 生成或放置 Markdown 数据文件到容器中，例如 `/app/data/fince.md` 和 `/app/data/fince-data.md`（如使用 Docker，可挂载宿主机目录到 `/app/data`）
+2. 打开管理面板，激活对应的财经模板，在「模板配置」表单中填入数据文件路径
+3. 点击「测试数据」验证解析是否成功；若成功，保存后下一次 cron 触发即会渲染仪表盘
+4. 数据文件格式参考：`docs/fince.md`（快照）和 `docs/fince-data.md`（一周走势 JSON）
 
 ## Kindle 客户端安装
 
@@ -255,6 +280,8 @@ ssh root@kindle "/mnt/us/dashboard/stop.sh"
 |---|---|---|
 | `openclaw` | OpenClaw 用量 | Token 用量、消息数、热门模型、Provider 配额、渠道状态 |
 | `calendar-weather-todo` | 日历 / 天气 / 待办 | 当月日历（含农历和中国节假日）、wttr.in 天气、Notion 今日待办 |
+| `finance` | 财经快照 | A股 / 美股指数、黄金和原油期货、比特币 —— 从 Markdown 数据文件解析 |
+| `finance-trend` | 财经一周走势 | A股 / 美股 / 期货 / 加密货币一周 sparkline 走势图，外加宏观指标和展望 |
 
 #### 添加自定义模板
 
@@ -304,13 +331,15 @@ const TEMPLATES = {
 4. 重启服务 — 新模板将出现在管理面板的模板选择器中。
 
 ### 服务端
-1. 启动时和每 5 分钟（cron），后端从 settings 读取活跃模板
-2. OpenClaw 模板连接 OpenClaw 网关 WebSocket，用 `password` 或 `token` 认证，并行调用 `sessions.usage` 和 `usage.status` RPC 方法
-3. 日历/天气/待办模板从 wttr.in 获取天气，生成日历数据（含农历和中国节假日，使用 `lunar-javascript` 库），并查询 Notion 数据库获取今日待办
-4. 模板渲染 e-ink 友好的 HTML
-5. 用 Puppeteer 将 HTML 截图为 PNG
-6. 将 PNG 转为纯灰度（无 alpha 通道）
-7. 通过 `GET /dash.png` 提供 PNG
+1. 启动时先生成一次仪表盘，然后根据活跃模板的 `cronByTemplate` 配置注册单个 cron 任务（无配置时回退到 `GENERATE_CRON`）
+2. 每次 cron 触发时，后端从 `data/settings.json` 读取活跃模板，依次调用 `fetchData()` 和 `render()`
+3. OpenClaw 模板连接 OpenClaw 网关 WebSocket，用 `password` 或 `token` 认证，并行调用 `sessions.usage` 和 `usage.status` RPC 方法
+4. 日历/天气/待办模板从 wttr.in 获取天气，生成日历数据（含农历和中国节假日，使用 `lunar-javascript` 库），并查询 Notion 数据库获取今日待办
+5. 财经快照和财经一周走势模板分别解析各自的 Markdown 数据文件（无网络调用）
+6. 模板渲染 e-ink 友好的 HTML
+7. 用 Puppeteer 将 HTML 截图为 PNG
+8. 将 PNG 转为纯灰度（无 alpha 通道）
+9. 通过 `GET /dash.png` 提供 PNG。当通过管理面板切换活跃模板或修改 cron 时，会自动停止旧任务并启动新任务
 
 ### Kindle 端
 1. 启动时停止 Kindle 框架，进入循环
@@ -372,17 +401,21 @@ kindle-dash/
 │   │   ├── templates/             # 仪表盘模板（可插拔）
 │   │   │   ├── index.js           # 模板注册表（getTemplate, listTemplates）
 │   │   │   ├── openclaw.js        # OpenClaw 用量模板
-│   │   │   └── calendar-weather-todo.js  # 日历/天气/待办模板
+│   │   │   ├── calendar-weather-todo.js  # 日历/天气/待办模板
+│   │   │   ├── finance.js         # 财经快照模板（md 驱动）
+│   │   │   └── finance-trend.js   # 财经一周走势模板（md 驱动）
 │   │   ├── admin.html             # 管理面板界面（响应式）
 │   │   ├── auth.js                # 管理面板认证（express-session）
 │   │   ├── fetch-usage.js         # OpenClaw WebSocket RPC 客户端
 │   │   ├── fetch-weather.js       # wttr.in 天气获取
 │   │   ├── fetch-todos.js         # Notion 待办获取
+│   │   ├── parse-finance.js       # 财经快照 md 解析（指数/期货/加密货币）
+│   │   ├── parse-finance-trend.js # 财经走势 md 解析（JSON 块 + 补充文件）
 │   │   ├── render-calendar.js     # 日历数据（农历+节假日，使用 lunar-javascript）
 │   │   ├── render-dashboard.js    # OpenClaw 仪表盘 HTML 渲染
 │   │   ├── screenshot.js          # Puppeteer 截图 + 灰度转换
-│   │   ├── settings.js            # 配置持久化（data/settings.json）
-│   │   └── index.js               # Express 服务 + cron 定时器
+│   │   ├── settings.js            # 配置持久化 + getCronForTemplate（data/settings.json）
+│   │   └── index.js               # Express 服务 + 每模板 cron 调度器
 │   ├── .env.example               # 环境变量模板
 │   ├── Dockerfile                 # 容器镜像（node:20-bookworm-slim + chromium）
 │   └── docker-compose.yml         # Docker Compose 配置（network_mode: host）
@@ -397,7 +430,7 @@ kindle-dash/
 │   ├── stop.sh                    # 停止脚本
 │   └── wait-for-wifi.sh           # Wi-Fi 连接检查
 ├── KUAL/                          # KUAL 扩展（菜单启动）
-├── docs/                          # 开发文档
+├── docs/                          # 开发文档（含 fince.md 与 fince-data.md 财经示例数据）
 ├── example/                       # 演示截图
 └── README.md
 ```
