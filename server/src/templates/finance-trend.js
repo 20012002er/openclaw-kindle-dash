@@ -380,18 +380,25 @@ async function fetchData(settings) {
   );
 
   // 读取补充内容（宏观经济 + 走势展望）
+  // 仅当用户在管理后台显式配置了 supplementaryFile 时才加载，否则不显示这两个 section
   const suppFile =
-    (settings && settings.financeTrend && settings.financeTrend.supplementaryFile) ||
-    path.resolve(__dirname, "..", "..", "..", "docs", "fince.md");
-  if (suppFile && fs.existsSync(suppFile)) {
-    console.log(`Parsing supplementary data from: ${suppFile}`);
-    const supp = parseSupplementaryFile(suppFile);
-    data.macro = supp.macro;
-    data.outlook = supp.outlook;
-    console.log(
-      `Supplementary parsed: 宏观=${supp.macro.length}, 展望=${supp.outlook.length}`
-    );
+    (settings && settings.financeTrend && settings.financeTrend.supplementaryFile) || "";
+  if (suppFile.trim()) {
+    if (fs.existsSync(suppFile)) {
+      console.log(`Parsing supplementary data from: ${suppFile}`);
+      const supp = parseSupplementaryFile(suppFile);
+      data.macro = supp.macro;
+      data.outlook = supp.outlook;
+      console.log(
+        `Supplementary parsed: 宏观=${supp.macro.length}, 展望=${supp.outlook.length}`
+      );
+    } else {
+      console.warn(`Supplementary file not found: ${suppFile}, skipping macro/outlook sections`);
+      data.macro = [];
+      data.outlook = [];
+    }
   } else {
+    console.log("No supplementaryFile configured, skipping macro/outlook sections");
     data.macro = [];
     data.outlook = [];
   }

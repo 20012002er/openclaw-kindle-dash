@@ -818,6 +818,11 @@
               <input type="text" id="financeTrendDataFile" class="form-input" placeholder="/app/data/fince-data.md" oninput="markDirty()">
               <div class="form-hint">经济趋势 markdown 文件的绝对路径（容器内路径），文件末尾需包含「## 📦 原始数据 (JSON)」代码块。默认为 /app/data/fince-data.md</div>
             </div>
+            <div class="form-group" style="margin-top:8px;">
+              <label class="form-label">补充数据文件路径</label>
+              <input type="text" id="financeTrendSuppFile" class="form-input" placeholder="/app/data/fince.md" oninput="markDirty()">
+              <div class="form-hint">用于补充「宏观经济」和「走势展望」section 的报告 md 文件（容器内路径）。包含「## N. 宏观经济」和「## N. 走势展望」章节。留空则不显示这两个 section。默认为 /app/data/fince.md</div>
+            </div>
           </div>
 
         </div>
@@ -1011,6 +1016,7 @@ async function loadSettings() {
 
     const finT = allSettings.financeTrend || {};
     document.getElementById('financeTrendDataFile').value = finT.dataFile || '';
+    document.getElementById('financeTrendSuppFile').value = finT.supplementaryFile || '';
 
     // 加载当前模板的 cron 表达式
     loadCronForCurrentTemplate();
@@ -1149,6 +1155,7 @@ async function saveAll() {
       },
       financeTrend: {
         dataFile: document.getElementById('financeTrendDataFile').value.trim(),
+        supplementaryFile: document.getElementById('financeTrendSuppFile').value.trim(),
       }
     };
     const result = await api('/api/settings', {
