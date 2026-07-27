@@ -13,11 +13,16 @@ RUN apt-get update \
         fonts-noto-cjk \
         ca-certificates \
         gosu \
+        tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Puppeteer 不再下载自带 Chromium，使用系统安装的 chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# 默认时区为北京时间；可在 .env 中用 TZ 覆盖（如 Europe/Amsterdam）
+# node-cron 与 Date.toISOString() 之外的本地时间输出都依赖此变量
+ENV TZ=Asia/Shanghai
 
 WORKDIR /app
 

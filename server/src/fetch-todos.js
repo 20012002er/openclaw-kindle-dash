@@ -5,6 +5,17 @@ const https = require("https");
  * 移植自用户的 Python 脚本逻辑。
  */
 
+/**
+ * 以配置的时区返回 YYYY-MM-DD 格式的日期字符串。
+ * 不能用 toISOString()，因为它始终返回 UTC 日期，
+ * 在 TZ=Asia/Shanghai 时 0:00-8:00 会得到"昨天"。
+ * 依赖 process.env.TZ（由 Dockerfile / .env 设置，默认 Asia/Shanghai）。
+ */
+function dateToStr(date) {
+  const tz = process.env.TZ;
+  return date.toLocaleDateString("sv-SE", tz ? { timeZone: tz } : undefined);
+}
+
 function httpsPostJson(url, body, headers) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
@@ -58,10 +69,10 @@ function httpsPostJson(url, body, headers) {
 async function fetchTodos(apiKey, dbId) {
   if (!apiKey || !dbId) {
     console.log("Notion API key or DB ID not configured, skipping todos");
-    return { todayTodos: [], importantTodos: [], date: new Date().toISOString().slice(0, 10) };
+    return { todayTodos: [], importantTodos: [], date: dateToStr(new Date()) };
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = dateToStr(new Date());
 
   // 计算上月第一天
   const now = new Date();
@@ -73,7 +84,7 @@ async function fetchTodos(apiKey, dbId) {
     firstDayThisMonth.getMonth() === 0 ? 11 : firstDayThisMonth.getMonth() - 1,
     1
   );
-  const filterStart = firstDayLastMonth.toISOString().slice(0, 10);
+  const filterStart = dateToStr(firstDayLastMonth);
 
   console.log(`Fetching Notion todos since ${filterStart}, today=${today}`);
 
