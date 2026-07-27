@@ -7,19 +7,27 @@ require("dotenv").config();
 
 const { generateDashboard } = require("./screenshot");
 const { fetchUsage } = require("./fetch-usage");
-const { getSettings, saveSettings } = require("./settings");
+const {
+  getSettings,
+  saveSettings,
+  getCronForTemplate,
+  DEFAULT_CRON,
+} = require("./settings");
 const { requireAuth, login, logout } = require("./auth");
 const { listTemplates } = require("./templates");
 
 const PORT = process.env.PORT || 3000;
 const OUTPUT_FILE = path.resolve(process.env.OUTPUT_FILE || "public/dash.png");
-const GENERATE_CRON = process.env.GENERATE_CRON || "*/5 * * * *";
 const RUN_ONCE = process.argv.includes("--once");
 const SESSION_SECRET =
   process.env.SESSION_SECRET || "kindle-dash-secret-change-me";
 
 const app = express();
 const PUBLIC_DIR = path.dirname(OUTPUT_FILE);
+
+// 当前活跃的定时任务句柄；切换模板或保存设置时会重新调度
+let activeScheduledTask = null;
+let activeScheduledCron = null;
 
 fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 
@@ -88,12 +96,11 @@ app.post("/api/logout", logout);
 app.get("/api/settings", requireAuth, (req, res) => {
   const settings = getSettings();
   const templates = listTemplates();
-  // 计算下次定时生成时间（基于 GENERATE_CRON）
+  // 计算下次定时生成时间（基于当前 activeTemplate 的 cron）
+  const activeCron = getCronForTemplate(settings.activeTemplate);
   let nextRun = null;
   try {
-    const cron = process.env.GENERATE_CRON || "*/5 * * * *";
-    const parts = cron.trim().split(/\s+/);
-    // 简单处理 */N 分钟的场景
+    const parts = activeCron.trim().split(/\s+/);
     const minutePart = parts[0];
     const now = new Date();
     if (minutePart.startsWith("*/")) {
@@ -108,17 +115,25 @@ app.get("/api/settings", requireAuth, (req, res) => {
       }
       nextRun = next.toLocaleTimeString("zh-CN", { hour12: false });
     } else {
-      nextRun = cron;
+      nextRun = activeCron;
     }
   } catch (e) {
     nextRun = null;
   }
-  res.json({ settings, templates, nextRun });
+  res.json({ settings, templates, nextRun, activeCron });
 });
 
 // 保存设置（需认证）
 app.put("/api/settings", requireAuth, (req, res) => {
-  const { activeTemplate, openclaw, weather, notion, finance } = req.body || {};
+  const {
+    activeTemplate,
+    openclaw,
+    weather,
+    notion,
+    finance,
+    financeTrend,
+    cronByTemplate,
+  } = req.body || {};
   const current = getSettings();
   const updated = saveSettings({
     activeTemplate: activeTemplate || current.activeTemplate,
@@ -126,7 +141,11 @@ app.put("/api/settings", requireAuth, (req, res) => {
     weather: weather || current.weather,
     notion: notion || current.notion,
     finance: finance || current.finance,
+    financeTrend: financeTrend || current.financeTrend,
+    cronByTemplate: cronByTemplate || current.cronByTemplate,
   });
+  // 保存后重新调度定时任务（activeTemplate 可能切换或 cron 变更）
+  rescheduleActiveTask();
   res.json({ ok: true, settings: updated });
 });
 
@@ -142,6 +161,56 @@ app.get("/api/test/:templateId", requireAuth, async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+/**
+ * 重新调度当前 activeTemplate 的定时任务。
+ * - 若 cron 变更或模板切换，会先停止旧任务再启动新任务
+ * - 仅 activeTemplate 的 cron 会被注册执行
+ */
+function rescheduleActiveTask() {
+  const settings = getSettings();
+  const newCron = getCronForTemplate(settings.activeTemplate);
+
+  if (activeScheduledCron === newCron && activeScheduledTask) {
+    // cron 未变，无需重新调度
+    return;
+  }
+
+  // 停止旧任务
+  if (activeScheduledTask) {
+    try {
+      activeScheduledTask.stop();
+      console.log(`Stopped previous cron task: ${activeScheduledCron}`);
+    } catch (e) {
+      console.error("Failed to stop previous task:", e.message);
+    }
+    activeScheduledTask = null;
+  }
+
+  // 校验 cron 表达式
+  if (!cron.validate(newCron)) {
+    console.error(`Invalid cron expression: ${newCron}, skipping schedule`);
+    activeScheduledCron = null;
+    return;
+  }
+
+  // 启动新任务
+  activeScheduledTask = cron.schedule(newCron, async () => {
+    console.log(
+      `[${new Date().toISOString()}] Generating dashboard (template: ${settings.activeTemplate})...`
+    );
+    try {
+      await generateDashboard();
+      console.log("Dashboard generated.");
+    } catch (err) {
+      console.error("Generation failed:", err.message);
+    }
+  });
+  activeScheduledCron = newCron;
+  console.log(
+    `Scheduled cron for template "${settings.activeTemplate}": ${newCron}`
+  );
+}
 
 async function main() {
   if (RUN_ONCE) {
@@ -159,16 +228,8 @@ async function main() {
     console.error("Initial generation failed:", err.message);
   }
 
-  // 启动定时任务
-  cron.schedule(GENERATE_CRON, async () => {
-    console.log(`[${new Date().toISOString()}] Generating dashboard...`);
-    try {
-      await generateDashboard();
-      console.log("Dashboard generated.");
-    } catch (err) {
-      console.error("Generation failed:", err.message);
-    }
-  });
+  // 启动定时任务（基于 activeTemplate 的 cron 配置）
+  rescheduleActiveTask();
 
   // 启动 HTTP 服务
   app.listen(PORT, "0.0.0.0", () => {
@@ -176,7 +237,12 @@ async function main() {
     console.log(`  Dashboard PNG: http://localhost:${PORT}/dash.png`);
     console.log(`  Admin page:    http://localhost:${PORT}/admin`);
     console.log(`  Health check:  http://localhost:${PORT}/health`);
-    console.log(`  Cron schedule: ${GENERATE_CRON}`);
+    const settings = getSettings();
+    console.log(
+      `  Active template: ${settings.activeTemplate} (cron: ${getCronForTemplate(
+        settings.activeTemplate
+      )})`
+    );
   });
 }
 

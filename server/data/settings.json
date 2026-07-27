@@ -1,0 +1,27 @@
+{
+  "activeTemplate": "openclaw",
+  "cronByTemplate": {
+    "openclaw": "*/5 * * * *",
+    "calendar-weather-todo": "0 8 * * *",
+    "finance": "0 9,15,17 * * 1-5",
+    "finance-trend": "0 9,15,17 * * 1-5"
+  },
+  "openclaw": {
+    "baseUrl": "http://127.0.0.1:18789",
+    "authMode": "password",
+    "credential": ""
+  },
+  "weather": {
+    "city": "武汉"
+  },
+  "notion": {
+    "apiKey": "",
+    "dbId": ""
+  },
+  "finance": {
+    "dataFile": ""
+  },
+  "financeTrend": {
+    "dataFile": ""
+  }
+}

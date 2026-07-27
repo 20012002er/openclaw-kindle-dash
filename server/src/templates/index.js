@@ -1,11 +1,13 @@
 const openclaw = require("./openclaw");
 const calendarWeatherTodo = require("./calendar-weather-todo");
 const finance = require("./finance");
+const financeTrend = require("./finance-trend");
 
 const TEMPLATES = {
   [openclaw.id]: openclaw,
   [calendarWeatherTodo.id]: calendarWeatherTodo,
   [finance.id]: finance,
+  [financeTrend.id]: financeTrend,
 };
 
 function getTemplate(id) {
