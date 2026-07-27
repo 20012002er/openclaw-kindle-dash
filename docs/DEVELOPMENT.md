@@ -41,12 +41,30 @@ kindle-dash/
 │   └── next-wakeup/              # Rust 项目：计算 cron 下一次唤醒时间
 │       ├── Cargo.toml
 │       └── src/main.rs
-├── server/                       # 后端服务：抓取 OpenClaw 数据并生成仪表盘 PNG
+├── server/                       # 后端服务：多模板仪表盘 + 定时生成 PNG
 │   ├── src/
-│   │   ├── index.js              # HTTP 服务 + 定时任务入口
-│   │   ├── fetch-usage.js        # 从 OpenClaw 抓取 usage 数据
-│   │   ├── render-dashboard.js   # 渲染 e-ink 友好的 HTML 仪表盘
-│   │   └── screenshot.js         # Puppeteer 截图 + 灰度转换
+│   │   ├── index.js              # Express 服务 + 每模板 cron 调度器
+│   │   ├── admin.html            # 管理面板界面（响应式）
+│   │   ├── auth.js               # 管理面板认证（express-session）
+│   │   ├── settings.js           # 配置持久化 + getCronForTemplate（data/settings.json）
+│   │   ├── screenshot.js         # Puppeteer 截图 + 灰度转换
+│   │   ├── fetch-usage.js        # OpenClaw WebSocket RPC 客户端
+│   │   ├── fetch-weather.js      # wttr.in 天气获取
+│   │   ├── fetch-todos.js        # Notion 待办获取
+│   │   ├── parse-finance.js      # 财经快照 md 解析（指数/期货/加密货币）
+│   │   ├── parse-finance-trend.js# 财经走势 md 解析（JSON 块 + 补充文件）
+│   │   ├── render-calendar.js    # 日历数据（农历+节假日，使用 lunar-javascript）
+│   │   ├── render-dashboard.js   # OpenClaw 仪表盘 HTML 渲染
+│   │   └── templates/            # 仪表盘模板（可插拔）
+│   │       ├── index.js          # 模板注册表（getTemplate, listTemplates）
+│   │       ├── openclaw.js       # OpenClaw 用量模板
+│   │       ├── calendar-weather-todo.js  # 日历/天气/待办模板
+│   │       ├── finance.js        # 财经快照模板（md 驱动）
+│   │       └── finance-trend.js  # 财经一周走势模板（md 驱动）
+│   ├── data/                     # 持久化数据目录
+│   │   ├── settings.json         # 管理面板保存的运行时配置
+│   │   ├── fince.md              # 财经快照示例数据
+│   │   └── fince-data.md         # 财经一周走势示例数据
 │   ├── .env.example              # 环境变量模板
 │   ├── Dockerfile                # 容器化部署
 │   ├── docker-compose.yml        # 编排配置
@@ -58,6 +76,8 @@ kindle-dash/
 ├── docs/
 │   ├── DEVELOPMENT.md            # 本文件
 │   ├── tipstricks.md             # 生成仪表盘图片的提示
+│   ├── fince.md                  # 财经快照示例数据
+│   ├── fince-data.md             # 财经一周走势示例数据
 │   └── screenshotter/            # Puppeteer 截图参考实现
 │       ├── Dockerfile
 │       ├── screenshot.js
@@ -240,9 +260,9 @@ docker run -e URL=https://your-dashboard.example.com \
 }
 ```
 
-### 5.6 OpenClaw 仪表盘后端服务
+### 5.6 仪表盘后端服务
 
-本仓库在 `server/` 目录下新增了一个后端服务，用于从 OpenClaw Gateway 抓取 usage 数据，渲染为 e-ink 友好的仪表盘 PNG，通过 HTTP 暴露给 Kindle 拉取。
+本仓库在 `server/` 目录下提供了一个后端服务，采用**可插拔模板系统**，支持 OpenClaw 用量、日历/天气/待办、财经快照、财经一周走势等多种仪表盘，渲染为 e-ink 友好的 PNG，通过 HTTP 暴露给 Kindle 拉取。每个模板拥有独立的 cron 计划，可通过 Web 管理面板在浏览器中切换模板、编辑 cron、配置数据源。
 
 #### 架构
 
@@ -250,16 +270,22 @@ docker run -e URL=https://your-dashboard.example.com \
 [阿里云服务器]                              [Kindle Paperwhite]
 ┌─────────────────────────┐               ┌──────────────────┐
 │ OpenClaw Gateway :18789 │               │ kindle-dash      │
-│   └ Usage API           │               │  ├ dash.sh       │
+│   └ WS RPC              │               │  ├ dash.sh       │
 │        ↑                │               │  ├ fetch-dash.sh │── xh GET ──┐
 │  ┌─────┴──────────┐     │               │  └ eips 显示     │            │
 │  │ dash-server     │     │               └──────────────────┘            │
 │  │ (Node+Puppeteer)│     │                                               │
-│  │ 1.抓OpenClaw数据│     │                                               │
-│  │ 2.渲染e-ink HTML│     │                                               │
+│  │ 模板系统：      │     │                                               │
+│  │  • openclaw     │     │                                               │
+│  │  • cal/weather  │     │                                               │
+│  │  • finance      │     │                                               │
+│  │  • finance-trend│     │                                               │
+│  │ 每模板独立 cron │     │                                               │
+│  │ 1.fetchData()   │     │                                               │
+│  │ 2.render()      │     │                                               │
 │  │ 3.截图灰度PNG   │     │                                               │
 │  │ 4.HTTP /dash.png│ ←──────────────────────────────────────────────────┘
-│  │ 定时每5分钟     │     │
+│  │ 5.管理面板/admin│     │
 │  └────────────────┘     │
 └─────────────────────────┘
 ```
@@ -268,10 +294,23 @@ docker run -e URL=https://your-dashboard.example.com \
 
 | 文件 | 作用 |
 | --- | --- |
-| [server/src/index.js](../server/src/index.js) | HTTP 服务 + 定时任务入口 |
-| [server/src/fetch-usage.js](../server/src/fetch-usage.js) | 从 OpenClaw 抓取 usage 数据（支持 api/mock 模式） |
-| [server/src/render-dashboard.js](../server/src/render-dashboard.js) | 渲染 e-ink 友好的 HTML 仪表盘模板 |
+| [server/src/index.js](../server/src/index.js) | Express HTTP 服务 + 每模板 cron 调度器（rescheduleActiveTask） |
+| [server/src/admin.html](../server/src/admin.html) | 管理面板 UI（响应式，左右两栏） |
+| [server/src/auth.js](../server/src/auth.js) | 管理面板认证（express-session） |
+| [server/src/settings.js](../server/src/settings.js) | 配置持久化 + `getCronForTemplate()`（`data/settings.json`） |
 | [server/src/screenshot.js](../server/src/screenshot.js) | Puppeteer 截图 + 灰度 PNG 转换 |
+| [server/src/fetch-usage.js](../server/src/fetch-usage.js) | OpenClaw WebSocket RPC 客户端（password/token/none） |
+| [server/src/fetch-weather.js](../server/src/fetch-weather.js) | wttr.in 天气获取 |
+| [server/src/fetch-todos.js](../server/src/fetch-todos.js) | Notion 待办获取 |
+| [server/src/parse-finance.js](../server/src/parse-finance.js) | 财经快照 md 解析（指数/期货/加密货币） |
+| [server/src/parse-finance-trend.js](../server/src/parse-finance-trend.js) | 财经走势 md 解析（JSON 块 + 补充文件） |
+| [server/src/render-calendar.js](../server/src/render-calendar.js) | 日历数据（农历+节假日，使用 lunar-javascript） |
+| [server/src/render-dashboard.js](../server/src/render-dashboard.js) | OpenClaw 仪表盘 HTML 渲染 |
+| [server/src/templates/index.js](../server/src/templates/index.js) | 模板注册表（`getTemplate` / `listTemplates`） |
+| [server/src/templates/openclaw.js](../server/src/templates/openclaw.js) | OpenClaw 用量模板 |
+| [server/src/templates/calendar-weather-todo.js](../server/src/templates/calendar-weather-todo.js) | 日历/天气/待办模板 |
+| [server/src/templates/finance.js](../server/src/templates/finance.js) | 财经快照模板（md 驱动） |
+| [server/src/templates/finance-trend.js](../server/src/templates/finance-trend.js) | 财经一周走势模板（md 驱动） |
 | [server/.env.example](../server/.env.example) | 环境变量模板 |
 | [server/Dockerfile](../server/Dockerfile) | 容器化部署 |
 | [server/docker-compose.yml](../server/docker-compose.yml) | Docker 编排 |
@@ -283,7 +322,7 @@ docker run -e URL=https://your-dashboard.example.com \
 ```sh
 cd server
 cp .env.example .env
-# 编辑 .env，填入 OpenClaw 地址、Token 等
+# 编辑 .env，填入 OpenClaw 地址、凭证、管理账号等
 vi .env
 docker compose up -d --build
 ```
@@ -299,11 +338,22 @@ npm start
 ```
 
 服务启动后，可通过以下端点访问：
-- `GET /dash.png` — 仪表盘图片（Kindle 拉取此 URL）
-- `GET /health` — 健康检查
-- `POST /generate` — 手动触发生成
+
+| 方法 | 端点 | 认证 | 说明 |
+| --- | --- | --- | --- |
+| `GET` | `/dash.png` | 无 | 仪表盘图片（Kindle 拉取此 URL） |
+| `GET` | `/health` | 无 | 健康检查 |
+| `POST` | `/generate` | 无 | 手动触发生成 |
+| `GET` | `/admin` | 需要 | 管理面板界面 |
+| `POST` | `/api/login` | 无 | 管理面板登录 |
+| `POST` | `/api/logout` | 需要 | 管理面板登出 |
+| `GET` | `/api/settings` | 需要 | 读取当前配置 |
+| `POST` | `/api/settings` | 需要 | 保存配置（含 `activeTemplate`、`cronByTemplate`、各模板参数） |
+| `POST` | `/api/test` | 需要 | 测试当前模板数据获取 |
 
 #### 配置项
+
+环境变量集中在 [server/.env.example](../server/.env.example)：
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -311,14 +361,41 @@ npm start
 | `OPENCLAW_AUTH_MODE` | `password` | 认证模式：`token` / `password` / `none`（对应 `gateway.auth.mode`） |
 | `OPENCLAW_CREDENTIAL` | （空） | 网关凭证（token 或 password），统一用 `Authorization: Bearer` 发送 |
 | `OPENCLAW_USAGE_ENDPOINT` | `/api/usage` | Usage API 端点路径 |
-| `FETCH_MODE` | `api` | 数据抓取模式：`api` 或 `mock` |
+| `FETCH_MODE` | `api` | 数据抓取模式：`api` 或 `mock`（仅 OpenClaw 模板） |
 | `PORT` | `3000` | HTTP 服务端口 |
-| `GENERATE_CRON` | `*/5 * * * *` | 定时生成 cron（默认每 5 分钟） |
+| `GENERATE_CRON` | `*/5 * * * *` | 默认 cron 回退值：当模板在 `data/settings.json` 中没有配置独立 cron 时使用 |
 | `SCREEN_WIDTH` | `1072` | Kindle 屏幕宽度（KPW3 竖屏） |
 | `SCREEN_HEIGHT` | `1448` | Kindle 屏幕高度（KPW3 竖屏） |
 | `PAGE_RENDER_DELAY` | `1000` | 截图前等待渲染毫秒数 |
+| `ADMIN_USERNAME` | `admin` | 管理面板登录用户名 |
+| `ADMIN_PASSWORD` | （必填） | 管理面板登录密码 |
+| `SESSION_SECRET` | （必填） | express-session 加密密钥 |
 
 > **认证说明**：OpenClaw 只有单一凭证（token 或 password），没有用户名概念。不论 `auth.mode` 是 `token` 还是 `password`，请求头格式都是 `Authorization: Bearer <值>`。`OPENCLAW_AUTH_MODE` 主要用于日志展示和 `none` 模式判断，对请求头格式无影响。
+
+#### 模板系统
+
+每个模板是一个独立模块，导出 `id`、`name`、`description`、`defaultCron`、`fetchData(settings)` 和 `render(data)`。模板在 [server/src/templates/index.js](../server/src/templates/index.js) 中统一注册，`listTemplates()` 返回所有模板元数据，`getTemplate(id)` 按 ID 取模板。
+
+内置模板：
+
+| ID | 名称 | 默认 cron | 数据来源 |
+| --- | --- | --- | --- |
+| `openclaw` | OpenClaw 用量 | `*/5 * * * *` | OpenClaw Gateway WebSocket RPC |
+| `calendar-weather-todo` | 日历/天气/待办 | `0 8 * * *` | wttr.in + Notion API + lunar-javascript |
+| `finance` | 财经快照 | `0 9,15,17 * * 1-5` | 本地 Markdown 文件（`finance.dataFile`） |
+| `finance-trend` | 财经一周走势 | `0 9,15,17 * * 1-5` | 本地 Markdown 文件（`financeTrend.dataFile` + 可选 `supplementaryFile`） |
+
+#### 每模板独立 cron 调度
+
+调度逻辑在 [server/src/index.js](../server/src/index.js) 的 `rescheduleActiveTask()` 中实现：
+
+1. 启动时先生成一次仪表盘，然后调用 `rescheduleActiveTask()` 注册单个 cron 任务
+2. cron 表达式取自 `settings.cronByTemplate[activeTemplate]`，无配置时回退到模板的 `defaultCron`，再回退到 `GENERATE_CRON`
+3. 通过管理面板切换模板或修改 cron 时，先 `task.stop()` 旧任务，再用新表达式 `cron.schedule()` 新任务
+4. `settings.cronByTemplate` 持久化在 `data/settings.json`，容器重启后自动恢复
+
+`getCronForTemplate(templateId)`（[server/src/settings.js](../server/src/settings.js)）封装了上述回退链。
 
 #### 联调 Kindle 端
 
@@ -347,17 +424,22 @@ ls server/public/dashboard.html
 
 # 手动触发生成
 curl -X POST http://localhost:3000/generate
+
+# 测试某个模板的数据获取（需登录 admin）
+curl -b cookie.txt -X POST http://localhost:3000/api/test \
+  -H 'Content-Type: application/json' \
+  -d '{"template":"finance"}'
 ```
 
 #### 适配 OpenClaw API
 
-OpenClaw 的 API 可能因版本而异。如果默认的 `/api/usage` 端点不可用：
+OpenClaw 的 API 可能因版本而异。如果默认的 WebSocket RPC 调用不可用：
 
-1. **修改端点**：在 `.env` 中设置 `OPENCLAW_USAGE_ENDPOINT` 为正确路径
-2. **调整数据映射**：修改 [server/src/fetch-usage.js](../server/src/fetch-usage.js) 中的 `normalizeData()` 函数，将你的 API 响应字段映射到仪表盘所需格式
+1. **检查认证模式**：在 `.env` 中设置 `OPENCLAW_AUTH_MODE` 为 `password` / `token` / `none`
+2. **调整数据映射**：修改 [server/src/fetch-usage.js](../server/src/fetch-usage.js) 中的 `normalizeData()` 函数，将 RPC 响应字段映射到仪表盘所需格式
 3. **先用 mock 跑通**：设置 `FETCH_MODE=mock` 先验证整个流程，再切换到 `api` 模式
 
-仪表盘所需的数据结构（`normalizeData` 的输出格式）：
+OpenClaw 模板所需的数据结构（`normalizeData` 的输出格式）：
 
 ```js
 {
@@ -380,6 +462,19 @@ OpenClaw 的 API 可能因版本而异。如果默认的 `/api/usage` 端点不�
 }
 ```
 
+#### 财经模板的数据文件
+
+两个财经模板不调用任何外部 API，而是从 Markdown 文件解析数据，便于复用已有的市场数据流水线。
+
+**`finance`（财经快照）** — 读取结构如 `docs/fince.md` 的文件：
+- `## 2. A股市场` / `## 3. 美股市场`：指数表格（`名称 / 最新点位 / 日涨跌幅 / 周涨跌幅`）
+- `## 4. 商品市场`：黄金 (`fuGC`) 与原油 (`fuCL`) 期货 OHLC 表格
+- `## 5. 加密货币`：BTC 价格与 24h 涨跌
+
+**`finance-trend`（财经一周走势）** — 读取一个 Markdown 文件，其末尾 `## 📦 原始数据 (JSON)` 代码块包含 JSON 对象，由四个数组组成：`🇨🇳 国内市场`、`🇺🇸 美股市场`、`📈 商品期货`、`₿ 加密货币`。每个条目含 `name`、`unit`、`latest_price`、`daily_change_pct`、`week_data`（`{date, close, change_pct}`）。可选的补充 Markdown 文件（即财经快照文件）提供宏观指标（CPI/PPI/PMI/M2 等）和市场展望章节。
+
+数据文件路径在管理面板中配置，存储于 `data/settings.json` 的 `finance.dataFile` 和 `financeTrend.dataFile` / `financeTrend.supplementaryFile`。Docker 部署时建议挂载宿主机目录到 `/app/data`。
+
 #### 适配其他 Kindle 设备
 
 修改 `.env` 中的 `SCREEN_WIDTH` 和 `SCREEN_HEIGHT`：
@@ -392,12 +487,22 @@ OpenClaw 的 API 可能因版本而异。如果默认的 `/api/usage` 端点不�
 
 #### 自定义仪表盘布局
 
-仪表盘的 HTML 模板在 [server/src/render-dashboard.js](../server/src/render-dashboard.js) 的 `renderHtml()` 函数中。修改其中的 HTML/CSS 即可调整布局、字号、配色等。设计原则：
+仪表盘的 HTML 在各模板的 `render(data)` 函数中生成。设计原则：
 
 - 纯黑白灰度，无彩色（e-ink 屏幕只能显示灰度）
 - 高对比度（`#000` 文字 + `#fff` 背景）
 - 大字体（远距离可读）
 - 无外部依赖（不加载远程 CSS/JS/字体，确保截图速度）
+- 单页适配目标分辨率（默认 1072×1448），避免滚动
+
+**添加新模板**的步骤：
+
+1. 在 [server/src/templates/](../server/src/templates/) 下新建 `my-template.js`，导出 `id`、`name`、`description`、`defaultCron`、`fetchData(settings)`、`render(data)`
+2. 在 [server/src/templates/index.js](../server/src/templates/index.js) 中 `require` 并加入 `templates` 数组
+3. 如需配置项，在 [server/src/settings.js](../server/src/settings.js) 的默认配置中加入对应字段
+4. 在 [server/src/admin.html](../server/src/admin.html) 的配置表单中加入对应输入项
+5. 如需解析外部数据，可新建独立的 `parse-xxx.js` / `fetch-xxx.js` 模块，保持模板文件聚焦于渲染
+6. 重启服务，在管理面板切换到新模板即可
 
 ---
 
