@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { parseFinanceTrendFile, parseSupplementaryFile } = require("../parse-finance-trend");
+const { parseFinanceTrendFile } = require("../parse-finance-trend");
 
 const SCREEN_WIDTH = parseInt(process.env.SCREEN_WIDTH || "1072", 10);
 const SCREEN_HEIGHT = parseInt(process.env.SCREEN_HEIGHT || "1448", 10);
@@ -156,27 +156,6 @@ function renderSection(title, items, showUnit) {
     </div>`;
 }
 
-/**
- * 渲染宏观经济 section（4 列网格紧凑展示）
- */
-function renderMacroSection(items) {
-  if (!items || items.length === 0) return "";
-  const cells = items
-    .map((it) => {
-      const isNeg = /^-/.test(it.yoy);
-      return `<div class="macro-item">
-        <span class="macro-name">${it.name}</span>
-        <span><span class="macro-val ${isNeg ? "neg" : ""}">${it.yoy}</span><span class="macro-period">${it.period}</span></span>
-      </div>`;
-    })
-    .join("");
-  return `
-    <div class="section">
-      <div class="section-title">宏观经济</div>
-      <div class="macro-grid">${cells}</div>
-    </div>`;
-}
-
 function renderHtml(data) {
   return `<!DOCTYPE html>
 <html>
@@ -279,27 +258,6 @@ function renderHtml(data) {
     color: #888;
     text-align: center;
   }
-
-  /* ===== 宏观经济 ===== */
-  .macro-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px 14px;
-    border-bottom: 3px solid #000;
-    padding-bottom: 8px;
-  }
-  .macro-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-size: 20px;
-    border-bottom: 1px dotted #bbb;
-    padding: 5px 0;
-  }
-  .macro-name { color: #333; }
-  .macro-val { font-weight: bold; font-variant-numeric: tabular-nums; }
-  .macro-val.neg { /* 负值 */ }
-  .macro-period { font-size: 15px; color: #888; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -316,7 +274,6 @@ function renderHtml(data) {
   ${renderSection("美股市场", data.us, false)}
   ${renderSection("商品期货", data.futures, true)}
   ${renderSection("加密货币", data.crypto, true)}
-  ${renderMacroSection(data.macro || [])}
 
   <div class="footer">lazybeartoby · 经济趋势（含一周走势）</div>
 
@@ -337,21 +294,6 @@ async function fetchData(settings) {
   console.log(
     `Finance-trend data parsed: 国内=${data.domestic.length}, 美股=${data.us.length}, 期货=${data.futures.length}, 加密=${data.crypto.length}`
   );
-
-  // 读取补充内容（宏观经济）。走势展望模块已移除，不再加载。
-  // 默认从 data/fince.md 读取宏观经济；用户可在管理后台覆盖 supplementaryFile
-  const suppFile =
-    (settings && settings.financeTrend && settings.financeTrend.supplementaryFile) ||
-    path.resolve(__dirname, "..", "..", "data", "fince.md");
-  if (fs.existsSync(suppFile)) {
-    console.log(`Parsing supplementary data from: ${suppFile}`);
-    const supp = parseSupplementaryFile(suppFile);
-    data.macro = supp.macro;
-    console.log(`Supplementary parsed: 宏观=${supp.macro.length}`);
-  } else {
-    console.warn(`Supplementary file not found: ${suppFile}, skipping macro section`);
-    data.macro = [];
-  }
 
   return data;
 }

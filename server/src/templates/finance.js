@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { parseFinanceFile } = require("../parse-finance");
+const { parseSupplementaryFile } = require("../parse-finance-trend");
 
 const SCREEN_WIDTH = parseInt(process.env.SCREEN_WIDTH || "1072", 10);
 const SCREEN_HEIGHT = parseInt(process.env.SCREEN_HEIGHT || "1448", 10);
@@ -85,6 +86,50 @@ function renderFuturesCard(f, title, unit) {
     </div>`;
 }
 
+/**
+ * 渲染宏观经济 section（4 列网格紧凑展示）
+ */
+function renderMacroSection(items) {
+  if (!items || items.length === 0) return "";
+  const cells = items
+    .map((it) => {
+      const isNeg = /^-/.test(it.yoy);
+      return `<div class="macro-item">
+        <span class="macro-name">${it.name}</span>
+        <span><span class="macro-val ${isNeg ? "neg" : ""}">${it.yoy}</span><span class="macro-period">${it.period}</span></span>
+      </div>`;
+    })
+    .join("");
+  return `
+    <div class="section">
+      <div class="section-title">
+        <span>宏观经济</span>
+        <span class="section-sub">${items.length > 0 ? "同比 / 数据月份" : ""}</span>
+      </div>
+      <div class="macro-grid">${cells}</div>
+    </div>`;
+}
+
+/**
+ * 渲染走势展望 section
+ */
+function renderOutlookSection(items) {
+  if (!items || items.length === 0) return "";
+  const rows = items
+    .map(
+      (it) => `<div class="outlook-item">
+        <span class="outlook-label">${it.label}</span>
+        <span class="outlook-text">${it.text}</span>
+      </div>`
+    )
+    .join("");
+  return `
+    <div class="section">
+      <div class="section-title"><span>走势展望</span></div>
+      <div class="outlook-list">${rows}</div>
+    </div>`;
+}
+
 function renderHtml(data) {
   const aShares = data.aShares || [];
   const usStocks = data.usStocks || [];
@@ -133,6 +178,8 @@ function renderHtml(data) {
     padding: 28px 32px;
     position: relative;
     -webkit-font-smoothing: none;
+    display: flex;
+    flex-direction: column;
   }
 
   /* ===== Header ===== */
@@ -283,12 +330,51 @@ function renderHtml(data) {
   }
   .btc-change .arrow { margin-right: 4px; }
 
+  /* ===== 宏观经济 ===== */
+  .macro-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px 10px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 6px;
+  }
+  .macro-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 15px;
+    border-bottom: 1px dotted #bbb;
+    padding: 3px 0;
+  }
+  .macro-name { color: #333; }
+  .macro-val { font-weight: bold; font-variant-numeric: tabular-nums; }
+  .macro-val.neg { /* 负值 */ }
+  .macro-period { font-size: 11px; color: #888; margin-left: 4px; }
+
+  /* ===== 走势展望 ===== */
+  .outlook-list {
+    border-bottom: 2px solid #000;
+    padding-bottom: 4px;
+  }
+  .outlook-item {
+    display: flex;
+    font-size: 15px;
+    line-height: 1.4;
+    padding: 4px 0;
+    border-bottom: 1px dotted #bbb;
+  }
+  .outlook-item:last-child { border-bottom: none; }
+  .outlook-label {
+    flex: 0 0 64px;
+    font-weight: bold;
+    color: #000;
+  }
+  .outlook-text { flex: 1; color: #222; }
+
   /* ===== Footer ===== */
   .footer {
-    position: absolute;
-    bottom: 14px;
-    left: 32px;
-    right: 32px;
+    margin-top: auto;
+    padding-top: 10px;
     font-size: 16px;
     color: #888;
     text-align: center;
@@ -362,6 +448,9 @@ function renderHtml(data) {
     </div>
   </div>
 
+  ${renderMacroSection(data.macro || [])}
+  ${renderOutlookSection(data.outlook || [])}
+
   <div class="footer">lazybeartoby · 经济形势</div>
 
 </body>
@@ -383,6 +472,25 @@ async function fetchData(settings) {
       data.gold ? "yes" : "no"
     }, oil=${data.oil ? "yes" : "no"}, btc=${data.btc ? "yes" : "no"}`
   );
+
+  // 读取补充内容（宏观经济 + 走势展望）。默认与行情数据同源（fince.md），
+  // 用户可在管理后台通过 supplementaryFile 覆盖指向其他报告文件
+  const suppFile =
+    (settings && settings.finance && settings.finance.supplementaryFile) || dataFile;
+  if (fs.existsSync(suppFile)) {
+    console.log(`Parsing supplementary data from: ${suppFile}`);
+    const supp = parseSupplementaryFile(suppFile);
+    data.macro = supp.macro;
+    data.outlook = supp.outlook;
+    console.log(
+      `Supplementary parsed: 宏观=${supp.macro.length}, 展望=${supp.outlook.length}`
+    );
+  } else {
+    console.warn(`Supplementary file not found: ${suppFile}, skipping macro/outlook sections`);
+    data.macro = [];
+    data.outlook = [];
+  }
+
   return data;
 }
 
