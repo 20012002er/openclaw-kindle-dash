@@ -50,7 +50,7 @@ function arrow(v) {
  * @param {number} w SVG 宽
  * @param {number} h SVG 高
  */
-function renderSparkline(weekData, w = 220, h = 56) {
+function renderSparkline(weekData, w = 300, h = 80) {
   if (!weekData || weekData.length < 2) {
     return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
       <text x="${w / 2}" y="${h / 2}" text-anchor="middle" font-size="12" fill="#999">无数据</text>
@@ -97,25 +97,25 @@ function renderSparkline(weekData, w = 220, h = 56) {
   const dots = points
     .map(
       (p) =>
-        `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2" fill="#000" stroke="#fff" stroke-width="0.8"/>`
+        `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.8" fill="#000" stroke="#fff" stroke-width="1"/>`
     )
     .join("");
 
   // 最新点高亮（更大圆圈）
   const last = points[points.length - 1];
-  const lastDot = `<circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="3.5" fill="#000" stroke="#fff" stroke-width="1"/>`;
+  const lastDot = `<circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="4.5" fill="#000" stroke="#fff" stroke-width="1.4"/>`;
 
-  // 最高/最低标注（小字）
+  // 最高/最低标注
   const maxIdx = closes.indexOf(max);
   const minIdx = closes.indexOf(min);
   const maxPt = points[maxIdx];
   const minPt = points[minIdx];
-  const maxLabel = `<text x="${maxPt.x.toFixed(1)}" y="${(maxPt.y - 4).toFixed(1)}" text-anchor="middle" font-size="9" fill="#666">${fmtNum(max)}</text>`;
-  const minLabel = `<text x="${minPt.x.toFixed(1)}" y="${(minPt.y + 11).toFixed(1)}" text-anchor="middle" font-size="9" fill="#666">${fmtNum(min)}</text>`;
+  const maxLabel = `<text x="${maxPt.x.toFixed(1)}" y="${(maxPt.y - 6).toFixed(1)}" text-anchor="middle" font-size="13" fill="#555">${fmtNum(max)}</text>`;
+  const minLabel = `<text x="${minPt.x.toFixed(1)}" y="${(minPt.y + 15).toFixed(1)}" text-anchor="middle" font-size="13" fill="#555">${fmtNum(min)}</text>`;
 
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
     <path d="${areaPath}" fill="#000" fill-opacity="0.12" stroke="none"/>
-    <path d="${linePath}" fill="none" stroke="#000" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${linePath}" fill="none" stroke="#000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}
     ${lastDot}
     ${maxLabel}
@@ -177,26 +177,6 @@ function renderMacroSection(items) {
     </div>`;
 }
 
-/**
- * 渲染走势展望 section
- */
-function renderOutlookSection(items) {
-  if (!items || items.length === 0) return "";
-  const rows = items
-    .map(
-      (it) => `<div class="outlook-item">
-        <span class="outlook-label">${it.label}</span>
-        <span class="outlook-text">${it.text}</span>
-      </div>`
-    )
-    .join("");
-  return `
-    <div class="section">
-      <div class="section-title">走势展望</div>
-      <div class="outlook-list">${rows}</div>
-    </div>`;
-}
-
 function renderHtml(data) {
   return `<!DOCTYPE html>
 <html>
@@ -210,32 +190,34 @@ function renderHtml(data) {
     font-family: "Noto Sans CJK SC", "Helvetica", "Arial", sans-serif;
     background: #fff;
     color: #000;
-    padding: 26px 30px 22px;
+    padding: 30px 34px 26px;
     position: relative;
     -webkit-font-smoothing: none;
+    display: flex;
+    flex-direction: column;
   }
 
   /* ===== Header ===== */
   .header {
-    border-bottom: 4px solid #000;
-    padding-bottom: 10px;
-    margin-bottom: 14px;
+    border-bottom: 5px solid #000;
+    padding-bottom: 14px;
+    margin-bottom: 18px;
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
   }
-  .header-left { font-size: 36px; font-weight: bold; letter-spacing: -0.5px; }
-  .header-right { font-size: 18px; color: #444; text-align: right; }
-  .header-date { font-size: 14px; color: #777; margin-top: 2px; }
+  .header-left { font-size: 48px; font-weight: bold; letter-spacing: -0.5px; }
+  .header-right { font-size: 26px; color: #444; text-align: right; }
+  .header-date { font-size: 20px; color: #777; margin-top: 4px; }
 
   /* ===== Section ===== */
-  .section { margin-bottom: 12px; }
+  .section { margin-bottom: 16px; }
   .section-title {
-    font-size: 20px;
+    font-size: 30px;
     font-weight: bold;
-    border-left: 5px solid #000;
-    padding-left: 9px;
-    margin-bottom: 6px;
+    border-left: 7px solid #000;
+    padding-left: 12px;
+    margin-bottom: 8px;
     line-height: 1.2;
   }
 
@@ -244,36 +226,36 @@ function renderHtml(data) {
     display: flex;
     align-items: center;
     border-bottom: 1px solid #ccc;
-    padding: 7px 4px;
-    gap: 12px;
+    padding: 11px 6px;
+    gap: 16px;
   }
-  .ind-row:last-child { border-bottom: 2px solid #000; }
+  .ind-row:last-child { border-bottom: 3px solid #000; }
 
   .ind-name {
-    flex: 0 0 200px;
+    flex: 0 0 280px;
     display: flex;
     flex-direction: column;
     line-height: 1.15;
   }
-  .ind-name-text { font-size: 19px; font-weight: 600; }
-  .row-unit { font-size: 12px; color: #888; margin-top: 2px; }
+  .ind-name-text { font-size: 28px; font-weight: 600; }
+  .row-unit { font-size: 17px; color: #888; margin-top: 3px; }
 
   .ind-latest {
-    flex: 0 0 180px;
-    font-size: 26px;
+    flex: 0 0 240px;
+    font-size: 38px;
     font-weight: bold;
     font-variant-numeric: tabular-nums;
     text-align: right;
   }
 
   .ind-change {
-    flex: 0 0 130px;
-    font-size: 20px;
+    flex: 0 0 170px;
+    font-size: 30px;
     font-weight: bold;
     font-variant-numeric: tabular-nums;
     text-align: right;
   }
-  .ind-arrow { font-size: 16px; margin-right: 3px; }
+  .ind-arrow { font-size: 26px; margin-right: 4px; }
   .ind-row.up .ind-change { }
   .ind-row.down .ind-change { }
   .ind-row.down .ind-arrow,
@@ -291,11 +273,9 @@ function renderHtml(data) {
 
   /* ===== Footer ===== */
   .footer {
-    position: absolute;
-    bottom: 10px;
-    left: 30px;
-    right: 30px;
-    font-size: 14px;
+    margin-top: auto;
+    padding-top: 12px;
+    font-size: 20px;
     color: #888;
     text-align: center;
   }
@@ -304,42 +284,22 @@ function renderHtml(data) {
   .macro-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 4px 10px;
-    border-bottom: 2px solid #000;
-    padding-bottom: 6px;
+    gap: 6px 14px;
+    border-bottom: 3px solid #000;
+    padding-bottom: 8px;
   }
   .macro-item {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    font-size: 14px;
+    font-size: 20px;
     border-bottom: 1px dotted #bbb;
-    padding: 3px 0;
+    padding: 5px 0;
   }
   .macro-name { color: #333; }
   .macro-val { font-weight: bold; font-variant-numeric: tabular-nums; }
   .macro-val.neg { /* 负值 */ }
-  .macro-period { font-size: 11px; color: #888; margin-left: 4px; }
-
-  /* ===== 走势展望 ===== */
-  .outlook-list {
-    border-bottom: 2px solid #000;
-    padding-bottom: 4px;
-  }
-  .outlook-item {
-    display: flex;
-    font-size: 14px;
-    line-height: 1.4;
-    padding: 4px 0;
-    border-bottom: 1px dotted #bbb;
-  }
-  .outlook-item:last-child { border-bottom: none; }
-  .outlook-label {
-    flex: 0 0 56px;
-    font-weight: bold;
-    color: #000;
-  }
-  .outlook-text { flex: 1; color: #222; }
+  .macro-period { font-size: 15px; color: #888; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -357,7 +317,6 @@ function renderHtml(data) {
   ${renderSection("商品期货", data.futures, true)}
   ${renderSection("加密货币", data.crypto, true)}
   ${renderMacroSection(data.macro || [])}
-  ${renderOutlookSection(data.outlook || [])}
 
   <div class="footer">lazybeartoby · 经济趋势（含一周走势）</div>
 
@@ -379,28 +338,19 @@ async function fetchData(settings) {
     `Finance-trend data parsed: 国内=${data.domestic.length}, 美股=${data.us.length}, 期货=${data.futures.length}, 加密=${data.crypto.length}`
   );
 
-  // 读取补充内容（宏观经济 + 走势展望）
-  // 仅当用户在管理后台显式配置了 supplementaryFile 时才加载，否则不显示这两个 section
+  // 读取补充内容（宏观经济）。走势展望模块已移除，不再加载。
+  // 默认从 data/fince.md 读取宏观经济；用户可在管理后台覆盖 supplementaryFile
   const suppFile =
-    (settings && settings.financeTrend && settings.financeTrend.supplementaryFile) || "";
-  if (suppFile.trim()) {
-    if (fs.existsSync(suppFile)) {
-      console.log(`Parsing supplementary data from: ${suppFile}`);
-      const supp = parseSupplementaryFile(suppFile);
-      data.macro = supp.macro;
-      data.outlook = supp.outlook;
-      console.log(
-        `Supplementary parsed: 宏观=${supp.macro.length}, 展望=${supp.outlook.length}`
-      );
-    } else {
-      console.warn(`Supplementary file not found: ${suppFile}, skipping macro/outlook sections`);
-      data.macro = [];
-      data.outlook = [];
-    }
+    (settings && settings.financeTrend && settings.financeTrend.supplementaryFile) ||
+    path.resolve(__dirname, "..", "..", "data", "fince.md");
+  if (fs.existsSync(suppFile)) {
+    console.log(`Parsing supplementary data from: ${suppFile}`);
+    const supp = parseSupplementaryFile(suppFile);
+    data.macro = supp.macro;
+    console.log(`Supplementary parsed: 宏观=${supp.macro.length}`);
   } else {
-    console.log("No supplementaryFile configured, skipping macro/outlook sections");
+    console.warn(`Supplementary file not found: ${suppFile}, skipping macro section`);
     data.macro = [];
-    data.outlook = [];
   }
 
   return data;
