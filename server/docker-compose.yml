@@ -5,6 +5,11 @@ services:
     build: .
     container_name: kindle-dash-server
     restart: unless-stopped
+    # 使用 Docker 内置 init 进程（tini）作为 PID 1 负责回收僵尸进程。
+    # Node.js 不是 init 系统，不会 wait() 孤儿进程：Puppeteer 反复启停 Chromium
+    # 会派生大量子进程，浏览器退出后残留的孤儿进程会挂到 PID 1 名下无人回收，
+    # 越积越多。tini 会自动回收它们。（等价于 docker run --init）
+    init: true
     # 使用 host 网络模式：容器直接共享宿主机网络栈，
     # 这样容器内 127.0.0.1 就是宿主机，可以直接访问宿主机上的 OpenClaw，
     # 无需 host.docker.internal 或端口映射。

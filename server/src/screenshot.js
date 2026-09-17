@@ -89,7 +89,29 @@ async function generateDashboard(templateIdOverride) {
 
     console.log("Dashboard PNG generated:", OUTPUT_FILE);
   } finally {
+    await closeBrowser(browser);
+  }
+}
+
+/**
+ * 关闭浏览器并确保其进程退出。
+ * browser.close() 异常（浏览器假死/崩溃）时强制 SIGKILL 主进程，
+ * 避免残留 Chromium 进程成为孤儿/僵尸进程。
+ */
+async function closeBrowser(browser) {
+  try {
     await browser.close();
+  } catch (err) {
+    console.error(
+      "browser.close() failed, force killing chromium:",
+      err.message
+    );
+    try {
+      const proc = browser.process();
+      if (proc && !proc.killed) proc.kill("SIGKILL");
+    } catch (e) {
+      // 浏览器进程已不存在，无需处理
+    }
   }
 }
 
